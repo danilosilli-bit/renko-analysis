@@ -8,7 +8,7 @@ from IPython.display import display
 
 
 
-client = MT5Client(login=xxxxxxxxx, server='XPMT5-DEMO')
+client = MT5Client(login=50390846, server='XPMT5-DEMO')
 client.connect()
 infoterminal = client.get_terminal_info()
 

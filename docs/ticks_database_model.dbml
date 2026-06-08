@@ -1,0 +1,17 @@
+// Ticks Data Base
+// Logical Database Model v1.0
+// Last Updated: 2026-06-08
+
+
+Table ticks {
+    id [pk]
+    symbol TEXT [NOT NULL]
+    timestamp TEXT [NOT NULL]
+    timestamp_ms TEXT [NOT NULL]
+    bid REAL
+    ask REAL
+    last REAL
+    volume INTEGER
+    flags INTEGER
+    volume_real REAL
+}

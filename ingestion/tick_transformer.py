@@ -27,5 +27,6 @@ def normalize_ticks(ticks):
         if name not in ('time', 'time_msc'):
             new_ticks[name] = ticks[name]
 
-    return new_ticks
+    new_ticks = remove_duplicates_ticks(new_ticks)
 
+    return new_ticks
