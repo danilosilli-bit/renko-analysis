@@ -1,7 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual Environment
 venv/
 .venv/
-__pycache__/
-*.pyc
 .env
-.vscode/
+
+# Jupyter
 .ipynb_checkpoints/
+
+# SQLite
+*.db
+
+# VSCode
+.vscode/
+
+# Logs
+*.log

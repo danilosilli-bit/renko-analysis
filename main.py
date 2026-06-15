@@ -5,6 +5,8 @@ import ingestion.tick_utils as tick_utils
 import ingestion.tick_transformer as tick_transformer
 import numpy as np
 from IPython.display import display
+from storage.tick_repository import TickRepository
+from storage.sqlite_manager import SQLiteManager
 
 
 
@@ -23,3 +25,19 @@ client.disconnect()
 new_ticks = tick_transformer.normalize_ticks(ticks)
 print(type(new_ticks))
 display(new_ticks)
+
+db = SQLiteManager("ticks.db")
+
+repository = TickRepository(db)
+
+repository.create_table("PETR4")
+
+repository.save_ticks(
+    "PETR4",
+    new_ticks
+)
+
+print(
+    repository.count_ticks("PETR4")
+)
+

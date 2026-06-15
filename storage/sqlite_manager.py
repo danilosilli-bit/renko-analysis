@@ -50,3 +50,5 @@ class SQLiteManager:
             self.conn.close()
             self.conn = None
 
+            
+
