@@ -1,11 +1,10 @@
 // Ticks Data Base
 // Logical Database Model v1.0
-// Last Updated: 2026-06-08
+// Last Updated: 2026-06-16
 
 
-Table ticks {
+Table ticks_<symbol> {
     id [pk]
-    symbol TEXT [NOT NULL]
     timestamp TEXT [NOT NULL]
     timestamp_ms TEXT [NOT NULL]
     bid REAL
@@ -14,4 +13,12 @@ Table ticks {
     volume INTEGER
     flags INTEGER
     volume_real REAL
+    buy_qty REAL
+    sell_qty REAL
+    buy_financial REAL
+    sell_financial REAL
+    is_auction BOOLEAN
+    Indexes {
+        (timestamp_ms) [unique]
+    }
 }

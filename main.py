@@ -17,7 +17,7 @@ infoterminal = client.get_terminal_info()
 for k in infoterminal.keys():
     print(k, ' -> ', infoterminal[k])
 
-ticks = TickCollector(client).collect_ticks_batch('PETR4', pd.Timestamp('2026-05-12'), 10)
+ticks = TickCollector(client).collect_ticks_batch('PETR4', pd.Timestamp('2026-05-12'), 1000)
 display(ticks)
 
 client.disconnect()
