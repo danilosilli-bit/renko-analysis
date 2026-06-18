@@ -1,28 +1,59 @@
 # Renko Analysis
 
-Python project for financial market analysis and Renko chart visualization.
+Python project for financial market analysis and Renko chart generation from tick-by-tick data.
+
+## Overview
+
+Renko Analysis is a market data processing engine designed to transform raw tick data into Renko structures suitable for quantitative research, statistical analysis and trading strategy development.
+
+The project uses MetaTrader 5 as a data source and stores both tick and Renko data in SQLite databases.
+
+## Features
+
+* Tick collection from MetaTrader 5
+* Tick normalization and processing
+* SQLite persistence layer
+* Instrument configuration system
+* Renko brick generation
+* Multi-brick processing
+* Renko state management
+* Renko persistence layer
+* Renko plotting dataframe generation
+
+## Project Structure
+
+```text
+renko-analysis/
+├── ingestion/
+├── market/
+├── renko/
+├── storage/
+├── docs/
+├── scripts/
+└── main.py
+```
 
 ## Technologies
-- Python
-- Pandas
-- Matplotlib
-- Plotly
 
-## Current Features
+* Python
+* Pandas
+* SQLite
+* MetaTrader 5
+* Matplotlib
+* MPLFinance
 
-✓ MT5 Tick Collection
-✓ Tick Persistence (SQLite)
-✓ Renko Brick Generation
-✓ Renko State Management
-✓ Multi-Brick Processing
-✓ Renko Persistence (SQLite)
-✓ Instrument Configuration Layer
-✓ Renko Plot Data Generation
+## Roadmap
 
-## Next Steps
+* [x] Tick collection
+* [x] Tick persistence
+* [x] Renko generation
+* [x] Renko state management
+* [x] Multi-brick processing
+* [ ] Renko visualization
+* [ ] Statistical analysis
+* [ ] Pattern detection
+* [ ] Backtesting engine
 
-- Renko Visualization
-- Statistical Analysis
-- Pattern Detection
-- Quantitative Research Tools
-- Strategy Backtesting
+## Author
+
+Danilo Silli
