@@ -104,3 +104,5 @@ class TickRepository:
         self.db.execute(
             f"DELETE FROM sqlite_sequence WHERE name='{table_name}'"
         )
+
+        

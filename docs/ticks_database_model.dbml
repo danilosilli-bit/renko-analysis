@@ -1,6 +1,6 @@
 // Ticks Data Base
 // Logical Database Model v1.0
-// Last Updated: 2026-06-16
+// Last Updated: 2026-06-17
 
 
 Table ticks_<symbol> {
@@ -20,5 +20,43 @@ Table ticks_<symbol> {
     is_auction BOOLEAN
     Indexes {
         (timestamp_ms) [unique]
+    }
+}
+
+Table renko_<symbol> {
+    id [pk]
+    brick_size: REAL
+    open_time: datetime
+    close_time: datetime
+    open: REAL
+    close: REAL
+    high: REAL
+    low: REAL
+    direction: TEXT
+    volume: REAL
+    buy_qty REAL
+    sell_qty REAL
+    buy_financial REAL
+    sell_financial REAL
+    trades_count: INTEGER
+}
+
+Table renko_state {
+    symbol: TEXT [pk] [NOT NULL]
+    brick_size: REAL
+    open_time: datetime
+    open: REAL
+    last: REAL
+    high: REAL
+    low: REAL
+    direction: TEXT | NONE
+    volume: REAL
+    buy_qty REAL
+    sell_qty REAL
+    buy_financial REAL
+    sell_financial REAL
+    trades_count: INTEGER
+    Indexes {
+        (symbol) [unique]
     }
 }

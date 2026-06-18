@@ -1,0 +1,91 @@
+import sqlite3
+
+DB_PATH = "data/renko.db"
+
+conn = sqlite3.connect(DB_PATH)
+
+cursor = conn.cursor()
+
+cursor.execute("""
+SELECT name
+FROM sqlite_master
+WHERE type='table'
+""")
+
+tables = cursor.fetchall()
+
+print("Tabelas encontradas:")
+for table in tables:
+    print(table[0])
+
+conn.close()
+
+
+#consultar registro
+conn = sqlite3.connect(DB_PATH)
+
+conn.row_factory = sqlite3.Row
+
+cursor = conn.cursor()
+
+cursor.execute("""
+    SELECT *
+    FROM renko_petr4
+    """)
+
+rows = cursor.fetchall()
+
+for row in rows:
+    print(dict(row))
+
+conn.close()
+
+# alterar Registro
+conn = sqlite3.connect("data/renko.db")
+
+cursor = conn.cursor()
+
+cursor.execute("""
+    UPDATE renko_petr4
+    SET open_time = "2026-06-11T16:45.460",  close_time = "2026-06-11T17:30.000"
+    WHERE id = 1
+    """)
+
+conn.commit()
+
+print(f"Registros alterados: {cursor.rowcount}")
+
+conn.close()
+
+#Deletar registro
+conn = sqlite3.connect("data/renko.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+    DELETE FROM renko_petr4
+    WHERE id = 11
+    """)
+
+conn.commit()
+
+print(f"Registros deletado: {cursor.rowcount}")
+
+conn.close()
+
+# deletar varios registros
+import sqlite3
+
+conn = sqlite3.connect("data/renko.db")
+
+cursor = conn.cursor()
+
+cursor.execute("""
+DELETE FROM renko_petr4
+WHERE id > 3
+""")
+
+conn.commit()
+
+print(f"Registros removidos: {cursor.rowcount}")
+
+conn.close()
