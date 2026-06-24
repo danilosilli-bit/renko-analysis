@@ -1,170 +1,167 @@
-import pandas as pd
+from datetime import date, datetime, time
+
 from ingestion.mt5_client import MT5Client
 from ingestion.tick_collector import TickCollector
-import ingestion.tick_utils as tick_utils
 import ingestion.tick_transformer as tick_transformer
-import numpy as np
-from IPython.display import display
-import mplfinance as mpf
-from matplotlib.patches import Rectangle
+
 from storage.tick_repository import TickRepository
 from storage.renko_repository import RenkoRepository
 from storage.sqlite_manager import SQLiteManager
+
 from renko.renko_engine import RenkoEngine
+from market.instrument_config import InstrumentConfig
 
 
-SYMBOL = "PETR4"
-BRICK_SIZE = 10
-START_DATE = pd.Timestamp("2026-06-12")
+RUN_MODE = "renko_only"
+# "collect_only"
+# "renko_only"
+# "collect_and_renko"
+
+COLLECT_MODE = "day" 
+# "batch"
+# "day"
+
+SYMBOLS = ["WINQ26"]
+
+DATES = [
+    date(2026, 6, 17), date(2026, 6, 18), date(2026, 6, 19), date(2026, 6, 22), date(2026, 6, 23)
+]
+
 TICK_LIMIT = 1000
 
+MT5_LOGIN = 50390846
+MT5_SERVER = "XPMT5-DEMO"
 
 
-def main():
-    client = MT5Client(login=50390846, server="XPMT5-DEMO")
-    client.connect()
-
-    ticks = TickCollector(client).collect_ticks_batch(
-        SYMBOL,
-        START_DATE,
-        TICK_LIMIT
+def collect_ticks(symbols, dates, collect_mode):
+    client = MT5Client(
+        login=MT5_LOGIN,
+        server=MT5_SERVER
     )
 
-    client.disconnect()
+    ticks_db = SQLiteManager("data/ticks.db")
+    tick_repository = TickRepository(ticks_db)
 
-    new_ticks = tick_transformer.normalize_ticks(ticks)
+    try:
+        client.connect()
+        collector = TickCollector(client)
 
+        for symbol in symbols:
+            tick_repository.create_table(symbol)
+
+            for target_date in dates:
+                print(f"Coletando ticks: {symbol} - {target_date}")
+
+                if collect_mode == "batch":
+                    start_datetime = datetime.combine(
+                        target_date,
+                        time.min
+                    )
+
+                    raw_ticks = collector.collect_ticks_batch(
+                        symbol,
+                        start_datetime,
+                        TICK_LIMIT
+                    )
+
+                elif collect_mode == "day":
+                    raw_ticks = collector.collect_ticks_day(
+                        symbol,
+                        target_date
+                    )
+
+                else:
+                    raise ValueError(f"Collect mode inválido: {collect_mode}")
+
+                if raw_ticks is None or len(raw_ticks) == 0:
+                    print(f"Nenhum tick encontrado para {symbol} em {target_date}")
+                    continue
+
+                normalized_ticks = tick_transformer.normalize_ticks(raw_ticks)
+
+                tick_repository.save_ticks(
+                    symbol,
+                    normalized_ticks
+                )
+
+                print(f"Ticks salvos: {symbol} - {len(normalized_ticks)}")
+
+    finally:
+        client.disconnect()
+
+
+def process_renko(symbols):
     ticks_db = SQLiteManager("data/ticks.db")
     renko_db = SQLiteManager("data/renko.db")
 
     tick_repository = TickRepository(ticks_db)
     renko_repository = RenkoRepository(renko_db)
 
-    tick_repository.create_table(SYMBOL)
-
     renko_repository.create_state_table()
-    renko_repository.create_renko_table(SYMBOL)
 
-    tick_repository.truncate_table(SYMBOL)
+    for symbol in symbols:
+        instrument = InstrumentConfig.from_symbol(symbol)
 
-    tick_repository.save_ticks(
-        SYMBOL,
-        new_ticks
-    )
+        renko_repository.create_renko_table(symbol)
 
-    print("Ticks salvos:", tick_repository.count_ticks(SYMBOL))
+        for target_date in DATES:
+            print(f"Processando dia: {symbol} - {target_date}")
 
-    engine = RenkoEngine(
-        SYMBOL,
-        BRICK_SIZE,
-        renko_repository
-    )
+            ticks = tick_repository.get_ticks_by_day(
+                symbol,
+                target_date
+            )
 
-    for tick in new_ticks:
-        engine.process_tick(tick)
+            if ticks is None or len(ticks) == 0:
+                print(f"Nenhum tick salvo para {symbol} em {target_date}")
+                continue
 
-    renko_table_name = renko_repository.get_table_name(SYMBOL)
+            for brick_size in instrument.renko_sizes:
+                print(f"Processando Renko: {symbol} - {brick_size} - {target_date}")
 
-    closed_bricks = renko_db.execute(
-        f"""
-        SELECT COUNT(*) AS total
-        FROM {renko_table_name}
-        WHERE brick_size = ?
-        """,
-        (BRICK_SIZE,)
-    )
+                engine = RenkoEngine(
+                    symbol=symbol,
+                    brick_size=brick_size,
+                    renko_repository=renko_repository,
+                    persist_state_every_tick=False
+                )
 
-    last_closed_brick = renko_repository.get_last_closed_brick(
-        SYMBOL,
-        BRICK_SIZE
-    )
+                for tick in ticks:
+                    engine.process_tick(tick)
 
-    final_state = renko_repository.get_state(
-        SYMBOL,
-        BRICK_SIZE
-    )
+                engine.flush_state()
 
-    print("Bricks fechados:", closed_bricks[0]["total"] if closed_bricks else 0)
+                last_brick = renko_repository.get_last_closed_brick(
+                    symbol,
+                    brick_size
+                )
 
-    _print_row("Último brick fechado:", last_closed_brick)
-    _print_row("Renko state final:", final_state)
-
-    df_renko = get_renko_plot_dataframe(
-        renko_db,
-        SYMBOL,
-        BRICK_SIZE
-    )
-    df_plot = df_renko.copy()
-
-    # garante colunas numéricas
-    cols = ["Open", "High", "Low", "Close", "Volume"]
-    df_plot[cols] = df_plot[cols].astype(float)
-
-    # cria datas artificiais sequenciais para o Renko
-    df_plot.index = pd.date_range(
-        start="2026-01-01 09:00:00",
-        periods=len(df_plot),
-        freq="1min"
-    )
-
-    mpf.plot(
-        df_plot,
-        type="candle",
-        style="charles",
-        title="Renko PETR4",
-        ylabel="Preço",
-        figsize=(20, 8),
-        volume=False
-    )
+                print("Último brick:", dict(last_brick) if last_brick else None)
 
 
+def main():
+    if RUN_MODE == "collect_only":
+        collect_ticks(
+            SYMBOLS,
+            DATES,
+            COLLECT_MODE
+        )
 
-def _print_row(label, row):
-    print(label)
-    if row is None:
-        print("  None")
-        return
+    elif RUN_MODE == "renko_only":
+        process_renko(SYMBOLS)
 
-    for key in row.keys():
-        print(f"  {key}: {row[key]}")
+    elif RUN_MODE == "collect_and_renko":
+        collect_ticks(
+            SYMBOLS,
+            DATES,
+            COLLECT_MODE
+        )
 
-def get_renko_plot_dataframe(db, symbol, brick_size):
+        process_renko(SYMBOLS)
 
-    table_name = f"renko_{symbol.lower()}"
+    else:
+        raise ValueError(f"RUN_MODE inválido: {RUN_MODE}")
 
-    rows = db.execute(
-        f"""
-        SELECT
-            close_time,
-            open,
-            high,
-            low,
-            close,
-            volume
-        FROM {table_name}
-        WHERE brick_size = ?
-        ORDER BY id
-        """,
-        (brick_size,)
-    )
-
-    df = pd.DataFrame([dict(row) for row in rows])
-
-    df["Date"] = pd.to_datetime(df["close_time"])
-
-    df["Open"] = df["open"].astype(float)
-    df["High"] = df["high"].astype(float)
-    df["Low"] = df["low"].astype(float)
-    df["Close"] = df["close"].astype(float)
-    df["Volume"] = df["volume"].astype(float)
-
-    df = df[
-        ["Date", "Open", "High", "Low", "Close", "Volume"]
-    ]
-
-    df = df.set_index("Date")
-
-    return df
 
 if __name__ == "__main__":
     main()

@@ -30,7 +30,27 @@ cursor = conn.cursor()
 
 cursor.execute("""
     SELECT *
-    FROM renko_petr4
+    FROM renko_state
+    """)
+
+rows = cursor.fetchall()
+
+for row in rows:
+    print(dict(row))
+
+conn.close()
+
+
+#consultar registro
+conn = sqlite3.connect(DB_PATH)
+
+conn.row_factory = sqlite3.Row
+
+cursor = conn.cursor()
+
+cursor.execute("""
+    SELECT *
+    FROM renko_winq26
     """)
 
 rows = cursor.fetchall()
@@ -80,8 +100,8 @@ conn = sqlite3.connect("data/renko.db")
 cursor = conn.cursor()
 
 cursor.execute("""
-DELETE FROM renko_petr4
-WHERE id > 3
+DELETE FROM renko_winq26
+WHERE id > 6
 """)
 
 conn.commit()
@@ -89,3 +109,295 @@ conn.commit()
 print(f"Registros removidos: {cursor.rowcount}")
 
 conn.close()
+
+
+# deletar tabela
+import sqlite3
+
+conn = sqlite3.connect("data/renko.db")
+
+cursor = conn.cursor()
+
+cursor.execute("""DROP TABLE IF EXISTS renko_state""")
+
+conn.commit()
+
+
+conn.close()
+
+
+
+
+def insert_renko(
+    conn,
+    symbol,
+    brick_size,
+    open_time,
+    close_time,
+    open_price,
+    close_price,
+    high,
+    low,
+    direction,
+    volume,
+    trades_count
+):
+    table_name = f"renko_{symbol.lower()}"
+
+    conn.execute(
+        f"""
+        INSERT INTO {table_name} (
+            brick_size,
+            open_time,
+            close_time,
+            open,
+            close,
+            high,
+            low,
+            direction,
+            volume,
+            buy_qty,
+            sell_qty,
+            buy_financial,
+            sell_financial,
+            trades_count
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            brick_size,
+            open_time,
+            close_time,
+            open_price,
+            close_price,
+            high,
+            low,
+            direction,
+            volume,
+            0,
+            0,
+            0,
+            0,
+            trades_count
+        )
+    )
+
+import sqlite3
+
+DB_PATH = "data/renko.db"
+
+conn = sqlite3.connect(DB_PATH)
+
+insert_renko(
+    conn=conn,
+    symbol="WINQ26",
+    brick_size=65,
+    open_time="2026-06-15T15:04.380",
+    close_time="2026-06-15T18:30.000",
+    open_price=174080,
+    close_price=173760,
+    high=174455,
+    low=173760,
+    direction="DOWN",
+    volume=63930,
+    trades_count=25575
+)
+
+conn.commit()
+
+conn.close()
+
+
+# criar a tabela
+conn = sqlite3.connect("data/renko.db")
+
+cursor = conn.cursor()
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS renko_winq26 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        brick_size REAL,
+
+        open_time TEXT,
+        close_time TEXT,
+
+        open REAL,
+        close REAL,
+
+        high REAL,
+        low REAL,
+
+        direction TEXT,
+
+        volume REAL,
+
+        buy_qty REAL,
+        sell_qty REAL,
+
+        buy_financial REAL,
+        sell_financial REAL,
+
+        trades_count INTEGER
+    )
+    """)
+
+conn.commit()
+
+print(f"Registros alterados: {cursor.rowcount}")
+
+conn.close()
+
+
+
+
+
+
+
+import pandas as pd
+import mplfinance as mpf
+
+
+def get_renko_by_day(db, symbol, brick_size, target_date):
+    table_name = f"renko_{symbol.lower()}"
+
+    start_date = f"{target_date}T00:00:00"
+    end_date = f"{target_date}T23:59:59"
+
+    rows = db.execute(
+        f"""
+        SELECT
+            close_time,
+            open,
+            high,
+            low,
+            close,
+            volume
+        FROM {table_name}
+        WHERE brick_size = ?
+          AND close_time BETWEEN ? AND ?
+        ORDER BY close_time
+        """,
+        (brick_size, start_date, end_date)
+    )
+
+
+
+    df = pd.DataFrame([dict(row) for row in rows])
+
+    if df.empty:
+        return df
+
+    df["Date"] = pd.to_datetime(df["close_time"])
+
+    df["Open"] = df["open"].astype(float)
+    df["High"] = df["high"].astype(float)
+    df["Low"] = df["low"].astype(float)
+    df["Close"] = df["close"].astype(float)
+    df["Volume"] = df["volume"].astype(float)
+
+    df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+    df = df.set_index("Date")
+
+    return df
+
+# =======================================
+
+
+
+#=======================================================
+
+def get_renko_by_period(db, symbol, brick_size, start_date, end_date):
+    table_name = f"renko_{symbol.lower()}"
+
+    start_date = f"{start_date}T00:00:00"
+    end_date = f"{end_date}T23:59:59"
+
+    rows = db.execute(
+        f"""
+        SELECT
+            close_time,
+            open,
+            high,
+            low,
+            close,
+            volume
+        FROM {table_name}
+        WHERE brick_size = ?
+          AND close_time BETWEEN ? AND ?
+        ORDER BY close_time
+        """,
+        (brick_size, start_date, end_date)
+    )
+
+    df = pd.DataFrame([dict(row) for row in rows])
+
+    if df.empty:
+        return df
+
+    df["Date"] = pd.to_datetime(df["close_time"])
+
+    df["Open"] = df["open"].astype(float)
+    df["High"] = df["high"].astype(float)
+    df["Low"] = df["low"].astype(float)
+    df["Close"] = df["close"].astype(float)
+    df["Volume"] = df["volume"].astype(float)
+
+    df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+    df = df.set_index("Date")
+
+    return df
+
+
+
+def plot_renko(df_renko, title="Renko Chart"):
+    if df_renko.empty:
+        print("Nenhum Renko encontrado para o período.")
+        return
+
+    df_plot = df_renko.copy()
+
+    df_plot.index = pd.date_range(
+        start="2026-01-01 09:00:00",
+        periods=len(df_plot),
+        freq="1min"
+    )
+
+    mpf.plot(
+        df_plot,
+        type="candle",
+        style="charles",
+        title=title,
+        ylabel="Preço",
+        figsize=(24, 8),
+        volume=False
+    )
+
+
+plot_renko(
+    df_renko,
+    title="Renko WINQ26 - 15R - 2026-06-17"
+)
+
+
+#==============================
+#==============================
+
+
+from storage.sqlite_manager import SQLiteManager
+
+renko_db = SQLiteManager("data/renko.db")
+
+df_renko = get_renko_by_day(
+    renko_db,
+    "WINQ26",
+    30,
+    "2026-06-23"
+)
+
+print(df_renko)
+
+plot_renko(
+    df_renko,
+    title="Renko WINQ26 - 30R - 2026-06-23"
+)

@@ -40,12 +40,11 @@ class RenkoRepository:
 
     def create_state_table(self):
 
-        query = f"""
+        query = """
         CREATE TABLE IF NOT EXISTS renko_state (
 
-            symbol TEXT PRIMARY KEY,
-
-            brick_size REAL,
+            symbol TEXT NOT NULL,
+            brick_size REAL NOT NULL,
 
             open_time TEXT,
 
@@ -67,7 +66,7 @@ class RenkoRepository:
 
             trades_count INTEGER,
 
-            UNIQUE(symbol)
+            PRIMARY KEY (symbol, brick_size)
         )
         """
 
@@ -195,4 +194,7 @@ class RenkoRepository:
     def get_table_name(self, symbol):
         return f"renko_{symbol.lower()}"
     
+    def drop_state_table(self):
+        self.db.execute("DROP TABLE IF EXISTS renko_state")
+        
 

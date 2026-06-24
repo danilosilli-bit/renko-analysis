@@ -26,11 +26,22 @@ class MT5Client:
         return info._asdict() if info else None
 
     def get_ticks(self, symbol, date_from, count=-1, flags=mt5.COPY_TICKS_TRADE):
-        """Fetch raw ticks from MT5"""
+        """Fetch raw ticks from MT5 using copy_ticks_from"""
         ticks = mt5.copy_ticks_from(
             symbol,
             date_from,
             count,
+            flags
+        )
+
+        return ticks
+
+    def get_ticks_range(self, symbol, date_from, date_to, flags=mt5.COPY_TICKS_TRADE):
+        """Fetch raw ticks from MT5 using copy_ticks_range"""
+        ticks = mt5.copy_ticks_range(
+            symbol,
+            date_from,
+            date_to,
             flags
         )
 
