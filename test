@@ -1,6 +1,8 @@
 import sqlite3
 
-DB_PATH = "data/renko.db"
+#DB_PATH = "data/renko.db"
+DB_PATH = "data/ticks.db"
+
 
 conn = sqlite3.connect(DB_PATH)
 
@@ -50,7 +52,7 @@ cursor = conn.cursor()
 
 cursor.execute("""
     SELECT *
-    FROM renko_winq26
+    FROM renko_winv26
     """)
 
 rows = cursor.fetchall()
@@ -65,10 +67,16 @@ conn = sqlite3.connect("data/renko.db")
 
 cursor = conn.cursor()
 
+#cursor.execute("""
+#    UPDATE renko_petr4
+#    SET open_time = "2026-06-11T16:45.460",  close_time = "2026-06-11T17:30.000"
+#    WHERE id = 1
+#    """)
+
 cursor.execute("""
     UPDATE renko_petr4
-    SET open_time = "2026-06-11T16:45.460",  close_time = "2026-06-11T17:30.000"
-    WHERE id = 1
+    SET high = 43.55
+    WHERE id = 2
     """)
 
 conn.commit()
@@ -100,7 +108,7 @@ conn = sqlite3.connect("data/renko.db")
 cursor = conn.cursor()
 
 cursor.execute("""
-DELETE FROM renko_winq26
+DELETE FROM renko_winv26
 WHERE id > 6
 """)
 
@@ -114,11 +122,13 @@ conn.close()
 # deletar tabela
 import sqlite3
 
-conn = sqlite3.connect("data/renko.db")
+#conn = sqlite3.connect("data/renko.db")
+conn = sqlite3.connect(DB_PATH)
 
 cursor = conn.cursor()
 
-cursor.execute("""DROP TABLE IF EXISTS renko_state""")
+#cursor.execute("""DROP TABLE IF EXISTS renko_state""")
+cursor.execute("""DROP TABLE IF EXISTS ticks_winv26""")
 
 conn.commit()
 
@@ -126,7 +136,7 @@ conn.commit()
 conn.close()
 
 
-
+#Inserir registro renko
 
 def insert_renko(
     conn,
@@ -190,7 +200,7 @@ conn = sqlite3.connect(DB_PATH)
 
 insert_renko(
     conn=conn,
-    symbol="WINQ26",
+    symbol="WINV26",
     brick_size=65,
     open_time="2026-06-15T15:04.380",
     close_time="2026-06-15T18:30.000",
@@ -208,13 +218,14 @@ conn.commit()
 conn.close()
 
 
+
 # criar a tabela
 conn = sqlite3.connect("data/renko.db")
 
 cursor = conn.cursor()
 
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS renko_winq26 (
+    CREATE TABLE IF NOT EXISTS renko_winv26 (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
         brick_size REAL,
@@ -253,7 +264,7 @@ conn.close()
 
 
 
-
+import sqlite3
 import pandas as pd
 import mplfinance as mpf
 
@@ -348,8 +359,6 @@ def get_renko_by_period(db, symbol, brick_size, start_date, end_date):
 
     return df
 
-
-
 def plot_renko(df_renko, title="Renko Chart"):
     if df_renko.empty:
         print("Nenhum Renko encontrado para o período.")
@@ -357,11 +366,11 @@ def plot_renko(df_renko, title="Renko Chart"):
 
     df_plot = df_renko.copy()
 
-    df_plot.index = pd.date_range(
-        start="2026-01-01 09:00:00",
-        periods=len(df_plot),
-        freq="1min"
-    )
+    # Garante que o índice seja DatetimeIndex
+    df_plot.index = pd.to_datetime(df_plot.index)
+
+    # Garante ordem cronológica
+    df_plot = df_plot.sort_index()
 
     mpf.plot(
         df_plot,
@@ -370,14 +379,10 @@ def plot_renko(df_renko, title="Renko Chart"):
         title=title,
         ylabel="Preço",
         figsize=(24, 8),
-        volume=False
+        volume=False,
+        show_nontrading=False
     )
 
-
-plot_renko(
-    df_renko,
-    title="Renko WINQ26 - 15R - 2026-06-17"
-)
 
 
 #==============================
@@ -390,14 +395,14 @@ renko_db = SQLiteManager("data/renko.db")
 
 df_renko = get_renko_by_day(
     renko_db,
-    "WINQ26",
+    "WINV26",
     30,
-    "2026-06-23"
+    "2026-08-10"
 )
 
 print(df_renko)
 
 plot_renko(
     df_renko,
-    title="Renko WINQ26 - 30R - 2026-06-23"
+    title="Renko WINV26 - 30R - 2026-08-10"
 )

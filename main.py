@@ -12,7 +12,7 @@ from renko.renko_engine import RenkoEngine
 from market.instrument_config import InstrumentConfig
 
 
-RUN_MODE = "renko_only"
+RUN_MODE ="collect_only"
 # "collect_only"
 # "renko_only"
 # "collect_and_renko"
@@ -21,11 +21,13 @@ COLLECT_MODE = "day"
 # "batch"
 # "day"
 
-SYMBOLS = ["WINQ26"]
+SYMBOLS = ["PETR4"]
+#SYMBOLS = ["WINV26", "PETR4", "VALE3", "ITUB4"]
+
 
 DATES = [
-    date(2026, 6, 17), date(2026, 6, 18), date(2026, 6, 19), date(2026, 6, 22), date(2026, 6, 23)
-]
+    date(2026, 8, 21) #, date(2026, 8, 10), date(2026, 8, 11), date(2026, 8, 12), date(2026, 8, 13), date(2026, 8, 14)
+    ]
 
 TICK_LIMIT = 1000
 

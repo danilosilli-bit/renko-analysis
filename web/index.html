@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Renko Analysis</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #111827;
+            color: #f3f4f6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .status-dot.online {
+            background: #22c55e;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+        }
+
+        .card {
+            background: #1f2937;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .symbol {
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .description {
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+
+        .prices {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 25px;
+        }
+
+        .price-box {
+            background: #111827;
+            padding: 18px;
+            border-radius: 8px;
+        }
+
+        .label {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .info-item {
+            background: #111827;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .market-status {
+            font-weight: bold;
+        }
+
+        .market-live {
+            color: #22c55e;
+        }
+
+        .market-stale {
+            color: #f59e0b;
+        }
+
+        .market-offline {
+            color: #ef4444;
+        }
+
+        @media (max-width: 700px) {
+            .prices,
+            .info-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Renko Analysis</h1>
+
+        <div class="status">
+            <span
+                id="status-dot"
+                class="status-dot"
+            ></span>
+
+            <span id="connection-status">
+                CONNECTING
+            </span>
+        </div>
+    </div>
+
+    <div class="card">
+
+        <div class="symbol" id="symbol">
+            Bra50
+        </div>
+
+        <div class="description" id="description">
+            Carregando...
+        </div>
+
+        <div class="prices">
+
+            <div class="price-box">
+                <div class="label">
+                    BID
+                </div>
+
+                <div
+                    class="value"
+                    id="bid"
+                >
+                    -
+                </div>
+            </div>
+
+            <div class="price-box">
+                <div class="label">
+                    ASK
+                </div>
+
+                <div
+                    class="value"
+                    id="ask"
+                >
+                    -
+                </div>
+            </div>
+
+            <div class="price-box">
+                <div class="label">
+                    LAST
+                </div>
+
+                <div
+                    class="value"
+                    id="last"
+                >
+                    -
+                </div>
+            </div>
+
+            <div class="price-box">
+                <div class="label">
+                    SPREAD
+                </div>
+
+                <div
+                    class="value"
+                    id="spread"
+                >
+                    -
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="card">
+
+        <div class="info-grid">
+
+            <div class="info-item">
+                <div class="label">
+                    MT5
+                </div>
+
+                <div id="mt5-status">
+                    -
+                </div>
+            </div>
+
+            <div class="info-item">
+                <div class="label">
+                    Mercado / Feed
+                </div>
+
+                <div
+                    id="market-status"
+                    class="market-status"
+                >
+                    -
+                </div>
+            </div>
+
+            <div class="info-item">
+                <div class="label">
+                    Último tick
+                </div>
+
+                <div id="last-tick">
+                    -
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="/static/app.js"></script>
+
+</body>
+</html>
