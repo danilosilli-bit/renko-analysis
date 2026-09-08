@@ -57,30 +57,42 @@ MARKET_CONFIG = {
         price_decimals=0,
         renko_sizes=[10, 15, 25, 30, 45, 65]
     ),
+
     "WDO": InstrumentConfig(
         symbol="WDO",
         tick_size=0.5,
         price_decimals=2,
         renko_sizes=[2, 3, 5, 6, 8, 10]
     ),
+
     "PETR4": InstrumentConfig(
         symbol="PETR4",
         tick_size=0.01,
         price_decimals=2,
         renko_sizes=[7, 10, 15]
     ),
+
     "VALE3": InstrumentConfig(
         symbol="VALE3",
         tick_size=0.01,
         price_decimals=2,
         renko_sizes=[7, 10, 15]
     ),
+
     "ITUB4": InstrumentConfig(
         symbol="ITUB4",
         tick_size=0.01,
         price_decimals=2,
         renko_sizes=[7, 10, 15]
-    ),    
+    ),
+
+    "BRA50": InstrumentConfig(
+        symbol="Bra50",
+        tick_size=5,
+        price_decimals=0,
+        renko_sizes=[10, 30, 45]
+    ),
+
     "EURUSD": InstrumentConfig(
         symbol="EURUSD",
         tick_size=0.00001,
