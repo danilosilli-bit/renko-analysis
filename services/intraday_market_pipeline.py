@@ -1,4 +1,9 @@
 from market.intraday_tick import IntradayTick
+from market.realtime_tick import RealtimeTick
+
+from services.intraday_tick_adapter import (
+    realtime_to_intraday_tick,
+)
 
 
 class IntradayMarketPipeline:
@@ -18,6 +23,20 @@ class IntradayMarketPipeline:
         self.tick_repository = tick_repository
         self.renko_service = renko_service
         self.symbol = symbol
+
+    def process_realtime_tick(
+        self,
+        tick: RealtimeTick,
+    ) -> None:
+
+        intraday_tick = realtime_to_intraday_tick(
+            tick,
+            source_type="CFD",
+        )
+
+        self.process_tick(
+            intraday_tick
+        )
 
     def process_tick(
         self,
