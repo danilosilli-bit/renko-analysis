@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
@@ -10,6 +13,7 @@
     <title>Renko Analysis</title>
 
     <style>
+
         * {
             box-sizing: border-box;
         }
@@ -22,7 +26,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 32px 20px;
         }
@@ -37,6 +41,12 @@
         h1 {
             margin: 0;
             font-size: 28px;
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 20px;
         }
 
         .status {
@@ -130,23 +140,179 @@
             color: #ef4444;
         }
 
+
+        /*
+            PAINÉIS RENKO
+        */
+
+        .renko-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .renko-card {
+            background: #111827;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .renko-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .renko-size {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .renko-count {
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        .renko-values {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .renko-value-box {
+            background: #1f2937;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .renko-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .renko-latest {
+            margin-top: 18px;
+            padding-top: 15px;
+            border-top: 1px solid #374151;
+            color: #9ca3af;
+            font-weight: bold;
+        }
+
+        .renko-up {
+            color: #22c55e;
+        }
+
+        .renko-down {
+            color: #ef4444;
+        }
+
+
+        /*
+            GRÁFICOS RENKO
+        */
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-header h2 {
+            margin-bottom: 5px;
+        }
+
+        .chart-subtitle {
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        .chart-count {
+            color: #9ca3af;
+            font-size: 13px;
+        }
+
+        .renko-chart-container {
+            position: relative;
+            width: 100%;
+            height: 420px;
+            background: #111827;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .renko-chart {
+            display: block;
+            width: 100%;
+            height: 420px;
+        }
+
+        .chart-empty {
+            position: absolute;
+            inset: 0;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            color: #6b7280;
+            font-size: 14px;
+
+            pointer-events: none;
+        }
+
+
+        @media (max-width: 900px) {
+
+            .renko-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
         @media (max-width: 700px) {
+
             .prices,
             .info-grid {
                 grid-template-columns: 1fr 1fr;
             }
         }
+
+
+        @media (max-width: 480px) {
+
+            .prices,
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+        }
+
     </style>
+
 </head>
+
 
 <body>
 
 <div class="container">
 
+    <!-- CABEÇALHO -->
+
     <div class="header">
-        <h1>Renko Analysis</h1>
+
+        <h1>
+            Renko Analysis
+        </h1>
 
         <div class="status">
+
             <span
                 id="status-dot"
                 class="status-dot"
@@ -155,22 +321,35 @@
             <span id="connection-status">
                 CONNECTING
             </span>
+
         </div>
+
     </div>
+
+
+    <!-- MERCADO -->
 
     <div class="card">
 
-        <div class="symbol" id="symbol">
+        <div
+            class="symbol"
+            id="symbol"
+        >
             Bra50
         </div>
 
-        <div class="description" id="description">
+        <div
+            class="description"
+            id="description"
+        >
             Carregando...
         </div>
+
 
         <div class="prices">
 
             <div class="price-box">
+
                 <div class="label">
                     BID
                 </div>
@@ -181,9 +360,12 @@
                 >
                     -
                 </div>
+
             </div>
 
+
             <div class="price-box">
+
                 <div class="label">
                     ASK
                 </div>
@@ -194,9 +376,12 @@
                 >
                     -
                 </div>
+
             </div>
 
+
             <div class="price-box">
+
                 <div class="label">
                     LAST
                 </div>
@@ -207,9 +392,12 @@
                 >
                     -
                 </div>
+
             </div>
 
+
             <div class="price-box">
+
                 <div class="label">
                     SPREAD
                 </div>
@@ -220,16 +408,22 @@
                 >
                     -
                 </div>
+
             </div>
 
         </div>
+
     </div>
+
+
+    <!-- STATUS -->
 
     <div class="card">
 
         <div class="info-grid">
 
             <div class="info-item">
+
                 <div class="label">
                     MT5
                 </div>
@@ -237,9 +431,12 @@
                 <div id="mt5-status">
                     -
                 </div>
+
             </div>
 
+
             <div class="info-item">
+
                 <div class="label">
                     Mercado / Feed
                 </div>
@@ -250,9 +447,12 @@
                 >
                     -
                 </div>
+
             </div>
 
+
             <div class="info-item">
+
                 <div class="label">
                     Último tick
                 </div>
@@ -260,6 +460,424 @@
                 <div id="last-tick">
                     -
                 </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- PAINÉIS RENKO -->
+
+    <div class="card">
+
+        <h2>
+            Renko em tempo real
+        </h2>
+
+
+        <div class="renko-grid">
+
+            <!-- 10R -->
+
+            <div class="renko-card">
+
+                <div class="renko-title">
+
+                    <div class="renko-size">
+                        10R
+                    </div>
+
+                    <div class="renko-count">
+                        Bricks:
+                        <span id="renko-10-count">
+                            0
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <div class="renko-values">
+
+                    <div class="renko-value-box">
+                        <div class="label">Direção</div>
+                        <div
+                            class="renko-value"
+                            id="renko-10-direction"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Open</div>
+                        <div
+                            class="renko-value"
+                            id="renko-10-open"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Last</div>
+                        <div
+                            class="renko-value"
+                            id="renko-10-last"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">High</div>
+                        <div
+                            class="renko-value"
+                            id="renko-10-high"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Low</div>
+                        <div
+                            class="renko-value"
+                            id="renko-10-low"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="renko-10-latest"
+                    class="renko-latest"
+                >
+                    Nenhum brick fechado
+                </div>
+
+            </div>
+
+
+            <!-- 30R -->
+
+            <div class="renko-card">
+
+                <div class="renko-title">
+
+                    <div class="renko-size">
+                        30R
+                    </div>
+
+                    <div class="renko-count">
+                        Bricks:
+                        <span id="renko-30-count">
+                            0
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <div class="renko-values">
+
+                    <div class="renko-value-box">
+                        <div class="label">Direção</div>
+                        <div
+                            class="renko-value"
+                            id="renko-30-direction"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Open</div>
+                        <div
+                            class="renko-value"
+                            id="renko-30-open"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Last</div>
+                        <div
+                            class="renko-value"
+                            id="renko-30-last"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">High</div>
+                        <div
+                            class="renko-value"
+                            id="renko-30-high"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Low</div>
+                        <div
+                            class="renko-value"
+                            id="renko-30-low"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="renko-30-latest"
+                    class="renko-latest"
+                >
+                    Nenhum brick fechado
+                </div>
+
+            </div>
+
+
+            <!-- 45R -->
+
+            <div class="renko-card">
+
+                <div class="renko-title">
+
+                    <div class="renko-size">
+                        45R
+                    </div>
+
+                    <div class="renko-count">
+                        Bricks:
+                        <span id="renko-45-count">
+                            0
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <div class="renko-values">
+
+                    <div class="renko-value-box">
+                        <div class="label">Direção</div>
+                        <div
+                            class="renko-value"
+                            id="renko-45-direction"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Open</div>
+                        <div
+                            class="renko-value"
+                            id="renko-45-open"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Last</div>
+                        <div
+                            class="renko-value"
+                            id="renko-45-last"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">High</div>
+                        <div
+                            class="renko-value"
+                            id="renko-45-high"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                    <div class="renko-value-box">
+                        <div class="label">Low</div>
+                        <div
+                            class="renko-value"
+                            id="renko-45-low"
+                        >
+                            -
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="renko-45-latest"
+                    class="renko-latest"
+                >
+                    Nenhum brick fechado
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- GRÁFICO 10R -->
+
+    <div class="card">
+
+        <div class="chart-header">
+
+            <div>
+
+                <h2>
+                    Gráfico Renko 10R
+                </h2>
+
+                <div class="chart-subtitle">
+                    Últimos bricks fechados
+                </div>
+
+            </div>
+
+            <div
+                id="renko-10-chart-count"
+                class="chart-count"
+            >
+                0 bricks
+            </div>
+
+        </div>
+
+
+        <div class="renko-chart-container">
+
+            <canvas
+                id="renko-10-chart"
+                class="renko-chart"
+                width="1100"
+                height="420"
+            ></canvas>
+
+            <div
+                id="renko-10-chart-empty"
+                class="chart-empty"
+            >
+                Aguardando bricks Renko 10R...
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- GRÁFICO 30R -->
+
+    <div class="card">
+
+        <div class="chart-header">
+
+            <div>
+
+                <h2>
+                    Gráfico Renko 30R
+                </h2>
+
+                <div class="chart-subtitle">
+                    Últimos bricks fechados
+                </div>
+
+            </div>
+
+            <div
+                id="renko-30-chart-count"
+                class="chart-count"
+            >
+                0 bricks
+            </div>
+
+        </div>
+
+
+        <div class="renko-chart-container">
+
+            <canvas
+                id="renko-30-chart"
+                class="renko-chart"
+                width="1100"
+                height="420"
+            ></canvas>
+
+            <div
+                id="renko-30-chart-empty"
+                class="chart-empty"
+            >
+                Aguardando bricks Renko 30R...
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- GRÁFICO 45R -->
+
+    <div class="card">
+
+        <div class="chart-header">
+
+            <div>
+
+                <h2>
+                    Gráfico Renko 45R
+                </h2>
+
+                <div class="chart-subtitle">
+                    Últimos bricks fechados
+                </div>
+
+            </div>
+
+            <div
+                id="renko-45-chart-count"
+                class="chart-count"
+            >
+                0 bricks
+            </div>
+
+        </div>
+
+
+        <div class="renko-chart-container">
+
+            <canvas
+                id="renko-45-chart"
+                class="renko-chart"
+                width="1100"
+                height="420"
+            ></canvas>
+
+            <div
+                id="renko-45-chart-empty"
+                class="chart-empty"
+            >
+                Aguardando bricks Renko 45R...
             </div>
 
         </div>
@@ -268,7 +886,9 @@
 
 </div>
 
+
 <script src="/static/app.js"></script>
 
 </body>
+
 </html>

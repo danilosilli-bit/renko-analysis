@@ -399,12 +399,12 @@ class RenkoEngine:
         state.high = self._round_price(max(open_price, tick["last"]))
         state.low = self._round_price(min(open_price, tick["last"]))
 
-        state.volume = tick["volume"]
-        state.buy_qty = tick["buy_qty"]
-        state.sell_qty = tick["sell_qty"]
-        state.buy_financial = tick["buy_financial"]
-        state.sell_financial = tick["sell_financial"]
-        state.trades_count = 1
+        state.volume = 0
+        state.buy_qty = 0
+        state.sell_qty = 0
+        state.buy_financial = 0
+        state.sell_financial = 0
+        state.trades_count = 0
 
         state.direction = None
 
