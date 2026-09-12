@@ -2,9 +2,17 @@ from collections.abc import Callable
 
 from market.realtime_tick import RealtimeTick
 from market.instrument_config import InstrumentConfig
+from market.intraday_tick import IntradayTick
 from renko.renko_engine import RenkoEngine
 from services.renko_tick_adapter import realtime_to_renko_tick
 
+from storage.realtime_renko_repository import (
+    RealtimeRenkoRepository,
+)
+
+from services.intraday_renko_adapter import (
+    intraday_to_renko_tick,
+)
 
 BrickCallback = Callable[[int, dict], None]
 
@@ -99,6 +107,56 @@ class RenkoService:
             # 1 = seed
             self._brick_counts[brick_size] = 1
 
+    def initialize_from_history(
+        self,
+        historical_repository,
+        intraday_repository,
+        historical_symbol: str,
+        intraday_symbol: str,
+    ) -> None:
+
+        for brick_size in self.brick_sizes:
+
+            repository = RealtimeRenkoRepository(
+                historical_repository=historical_repository,
+                intraday_repository=intraday_repository,
+                historical_symbol=historical_symbol,
+                intraday_symbol=intraday_symbol,
+            )
+
+            engine = RenkoEngine(
+                symbol=historical_symbol,
+                brick_size=brick_size,
+                renko_repository=repository,
+                persist_state_every_tick=False,
+            )
+
+            dummy_tick = {
+                "timestamp_ms": 0,
+                "last": 0.0,
+                "volume": 0.0,
+                "buy_qty": 0.0,
+                "sell_qty": 0.0,
+                "buy_financial": 0.0,
+                "sell_financial": 0.0,
+            }
+
+            engine._initialize_state(
+                dummy_tick
+            )
+
+            self.repositories[
+                brick_size
+            ] = repository
+
+            self.engines[
+                brick_size
+            ] = engine
+
+            self._brick_counts[
+                brick_size
+            ] = 0
+
     def subscribe(self, callback: BrickCallback) -> None:
         if callback not in self._subscribers:
             self._subscribers.append(callback)
@@ -132,6 +190,57 @@ class RenkoService:
             self._brick_counts[brick_size] = current_count
 
             for brick in new_bricks:
+                self._notify(
+                    brick_size,
+                    brick,
+                )
+
+    def process_intraday_tick(
+        self,
+        tick: IntradayTick,
+    ) -> None:
+
+        renko_tick = intraday_to_renko_tick(
+            tick
+        )
+
+        for brick_size in self.brick_sizes:
+
+            engine = self.engines[
+                brick_size
+            ]
+
+            repository = self.repositories[
+                brick_size
+            ]
+
+            previous_count = (
+                self._brick_counts[
+                    brick_size
+                ]
+            )
+
+            engine.process_tick(
+                renko_tick
+            )
+
+            current_count = len(
+                repository.bricks
+            )
+
+            if current_count <= previous_count:
+                continue
+
+            new_bricks = repository.bricks[
+                previous_count:
+            ]
+
+            self._brick_counts[
+                brick_size
+            ] = current_count
+
+            for brick in new_bricks:
+
                 self._notify(
                     brick_size,
                     brick,

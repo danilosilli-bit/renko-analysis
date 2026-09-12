@@ -1,4 +1,4 @@
-import numpy as np
+from datetime import datetime, timezone
 
 from renko.renko_brick import RenkoBrick
 from renko.renko_state import RenkoState
@@ -363,7 +363,9 @@ class RenkoEngine:
             state.symbol = saved_state["symbol"]
             state.brick_size = saved_state["brick_size"]
 
-            state.open_time = np.datetime64(saved_state["open_time"])
+            state.open_time = self._to_timestamp_ms(
+                saved_state["open_time"]
+            )
             state.open = self._round_price(saved_state["open"])
             state.last = self._round_price(saved_state["last"])
             state.high = self._round_price(saved_state["high"])
@@ -411,6 +413,44 @@ class RenkoEngine:
         self.state = state
 
         return state
+
+    def _to_timestamp_ms(self, value):
+        """
+        Normaliza valores temporais recuperados do repository
+        para timestamp Unix em milissegundos.
+
+        O RenkoEngine trabalha internamente somente com int ms.
+        """
+
+        if value is None:
+            return None
+
+        if isinstance(value, int):
+            return value
+
+        if isinstance(value, float):
+            return int(value)
+
+        if isinstance(value, datetime):
+            dt = value
+
+        else:
+            text = str(value)
+
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+
+            dt = datetime.fromisoformat(text)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        return int(
+            dt.timestamp() * 1000
+        )
+
 
     def _round_price(self, price):
         return self.instrument.round_price(price)
