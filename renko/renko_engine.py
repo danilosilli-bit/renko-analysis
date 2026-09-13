@@ -165,7 +165,7 @@ class RenkoEngine:
 
         elif last_direction == "DOWN":
 
-            if last < (close - brick_distance - tick_size):
+            if last < (close - brick_distance + tick_size):
                 qty_bricks = int((close - last) / brick_distance)
                 return "CONTINUATION_DOWN", max(qty_bricks, 1)
 
@@ -239,18 +239,35 @@ class RenkoEngine:
         }
 
 
-    def _build_closed_bricks(self, close_type, qty_bricks, tick):
+    def _build_closed_bricks(
+        self,
+        close_type,
+        qty_bricks,
+        tick,
+    ):
 
         if self.state is None:
             return None
 
         bricks = []
 
-        final_close_time = tick["timestamp_ms"]
-        step = (final_close_time - self.state.open_time) // qty_bricks
+        # Garante que os timestamps usados
+        # nos cálculos sejam inteiros em ms.
+        final_close_time = self._to_timestamp_ms(
+            tick["timestamp_ms"]
+        )
+
+        state_open_time = self._to_timestamp_ms(
+            self.state.open_time
+        )
+
+        step = (
+            final_close_time -
+            state_open_time
+        ) // qty_bricks
 
         first_close_time = (
-            self.state.open_time + step
+            state_open_time + step
             if qty_bricks > 1
             else final_close_time
         )
@@ -266,56 +283,140 @@ class RenkoEngine:
         bricks.append(first_brick)
 
         tick_size = self.instrument.tick_size
-        brick_distance = self.instrument.get_brick_distance(self.brick_size)
 
-        direction = first_brick["direction"]
-        open_price = first_brick["close"]
+        brick_distance = (
+            self.instrument.get_brick_distance(
+                self.brick_size
+            )
+        )
 
-        for i in range(1, qty_bricks):
-            open_time = first_brick["open_time"] + (i * step)
-            close_time = self.state.open_time + ((i + 1) * step)
+        direction = first_brick[
+            "direction"
+        ]
+
+        open_price = first_brick[
+            "close"
+        ]
+
+        first_brick_open_time = (
+            self._to_timestamp_ms(
+                first_brick["open_time"]
+            )
+        )
+
+        for i in range(
+            1,
+            qty_bricks,
+        ):
+
+            open_time = (
+                first_brick_open_time +
+                (i * step)
+            )
+
+            close_time = (
+                state_open_time +
+                ((i + 1) * step)
+            )
 
             if i == qty_bricks - 1:
-                open_time = final_close_time - 1
-                close_time = final_close_time
 
-            open_price = self._round_price(open_price)
+                open_time = (
+                    final_close_time - 1
+                )
+
+                close_time = (
+                    final_close_time
+                )
+
+            open_price = self._round_price(
+                open_price
+            )
 
             if direction == "UP":
-                close_price = self._round_price(
-                    open_price + brick_distance - tick_size
+
+                close_price = (
+                    self._round_price(
+                        open_price +
+                        brick_distance -
+                        tick_size
+                    )
                 )
+
             else:
-                close_price = self._round_price(
-                    open_price - (brick_distance - tick_size)
+
+                close_price = (
+                    self._round_price(
+                        open_price -
+                        (
+                            brick_distance -
+                            tick_size
+                        )
+                    )
                 )
 
             high_price = self._round_price(
-                max(open_price, close_price)
+                max(
+                    open_price,
+                    close_price,
+                )
             )
 
             low_price = self._round_price(
-                min(open_price, close_price)
+                min(
+                    open_price,
+                    close_price,
+                )
             )
 
             brick = {
-                "brick_size": self.brick_size,
-                "open_time": open_time,
-                "close_time": close_time,
-                "open": open_price,
-                "close": close_price,
-                "high": high_price,
-                "low": low_price,
-                "direction": direction,
-                "volume": 0,
-                "buy_qty": 0,
-                "sell_qty": 0,
-                "buy_financial": 0,
-                "sell_financial": 0,
-                "trades_count": 0,
+                "brick_size":
+                    self.brick_size,
+
+                "open_time":
+                    open_time,
+
+                "close_time":
+                    close_time,
+
+                "open":
+                    open_price,
+
+                "close":
+                    close_price,
+
+                "high":
+                    high_price,
+
+                "low":
+                    low_price,
+
+                "direction":
+                    direction,
+
+                "volume":
+                    0,
+
+                "buy_qty":
+                    0,
+
+                "sell_qty":
+                    0,
+
+                "buy_financial":
+                    0,
+
+                "sell_financial":
+                    0,
+
+                "trades_count":
+                    0,
             }
 
-            bricks.append(brick)
+            bricks.append(
+                brick
+            )
+
             open_price = close_price
 
         return bricks

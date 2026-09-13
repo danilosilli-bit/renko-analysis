@@ -768,9 +768,27 @@ function drawRenkoChart(
 
             /*
                 COR
+
+                Bricks gerados durante a
+                transição FUTURES -> CFD
+                são exibidos em cinza.
             */
 
+            const sourceTransition =
+                brick.source_transition === true ||
+                brick.source_transition === 1;
+
             if (
+                sourceTransition
+            ) {
+
+                ctx.fillStyle =
+                    "#6b7280";
+
+                ctx.strokeStyle =
+                    "#9ca3af";
+
+            } else if (
                 direction === "UP"
             ) {
 

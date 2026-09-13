@@ -27,11 +27,13 @@ class IntradayMarketPipeline:
     def process_realtime_tick(
         self,
         tick: RealtimeTick,
+        source_transition: bool = False,
     ) -> None:
 
         intraday_tick = realtime_to_intraday_tick(
             tick,
             source_type="CFD",
+            source_transition=source_transition
         )
 
         self.process_tick(

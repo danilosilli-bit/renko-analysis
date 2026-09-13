@@ -31,3 +31,5 @@ class IntradayTick:
     source_type: str = ""
     source_symbol: str = ""
     price_source: str = ""
+
+    source_transition: bool = False

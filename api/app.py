@@ -1,9 +1,20 @@
+from datetime import date
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from storage.tick_repository import TickRepository
+
+from config.storage_config import (
+    HISTORICAL_TICKS_DB,
+)
+
+from services.intraday_bootstrap_service import (
+    IntradayBootstrapService,
+)
 
 from config.storage_config import (
     HISTORICAL_RENKO_DB,
@@ -39,6 +50,10 @@ from storage.renko_repository import (
 
 from storage.sqlite_manager import (
     SQLiteManager,
+)
+
+from services.source_handoff_service import (
+    SourceHandoffService,
 )
 
 
@@ -78,9 +93,11 @@ renko_service = RenkoService(
 
 intraday_repository = None
 intraday_pipeline = None
-
 renko_initialized = False
+bootstrap_result = None
+source_handoff_service = None
 
+historical_repository = None
 
 # ============================================================
 # HELPERS
@@ -116,21 +133,39 @@ def get_intraday_bricks(
     brick_size: int,
 ) -> list[dict]:
     """
-    Retorna somente os bricks gerados nesta sessão intraday.
-
-    Não usa RenkoService.get_bricks() por enquanto,
-    pois esse método ainda pertence ao fluxo antigo
-    que utilizava seed artificial.
+    Retorna os bricks persistidos
+    no banco intraday da sessão atual.
     """
 
-    repository = renko_service.repositories.get(
-        brick_size
-    )
-
-    if repository is None:
+    if intraday_repository is None:
         return []
 
-    return repository.bricks
+    table_name = (
+        intraday_repository
+        .renko_repository
+        .get_table_name(
+            INTRADAY_SYMBOL
+        )
+    )
+
+    rows = (
+        intraday_repository
+        .renko_db
+        .execute(
+            f"""
+            SELECT *
+            FROM {table_name}
+            WHERE brick_size = ?
+            ORDER BY id
+            """,
+            (brick_size,),
+        )
+    )
+
+    return [
+        dict(row)
+        for row in rows
+    ]
 
 
 def get_latest_intraday_brick(
@@ -150,6 +185,39 @@ def get_latest_intraday_brick(
     return bricks[-1]
 
 
+def handle_realtime_tick(tick):
+
+    if source_handoff_service is None:
+        return
+
+    handoff_result = (
+        source_handoff_service.accept_realtime_tick(
+            tick.timestamp_ms
+        )
+    )
+
+    if not handoff_result["accepted"]:
+        return
+
+    if handoff_result["source_transition"]:
+        print(
+            "Tick realtime marcado como "
+            "source_transition."
+        )
+
+    if intraday_pipeline is None:
+        return
+
+    intraday_pipeline.process_realtime_tick(
+        tick,
+        source_transition=(
+            handoff_result["source_transition"]
+        ),
+    )
+
+
+
+
 # ============================================================
 # STARTUP / SHUTDOWN
 # ============================================================
@@ -160,6 +228,9 @@ async def lifespan(app: FastAPI):
     global intraday_repository
     global intraday_pipeline
     global renko_initialized
+    global bootstrap_result
+    global source_handoff_service
+    global historical_repository
 
     # --------------------------------------------------------
     # 1. Limpa armazenamento intraday da sessão anterior
@@ -188,6 +259,14 @@ async def lifespan(app: FastAPI):
     historical_repository = RenkoRepository(
         historical_db
     )
+
+    historical_ticks_db = SQLiteManager(
+        str(HISTORICAL_TICKS_DB)
+    )
+
+    historical_tick_repository = TickRepository(
+        historical_ticks_db
+    )    
 
 
     # --------------------------------------------------------
@@ -221,6 +300,7 @@ async def lifespan(app: FastAPI):
 
     renko_initialized = True
 
+
     print(
         "Renko inicializado pelo histórico: "
         + ", ".join(
@@ -228,6 +308,44 @@ async def lifespan(app: FastAPI):
             for size in BRICK_SIZES
         )
     )
+
+    print(
+        f"Reconstruindo intraday de "
+        f"{HISTORICAL_SYMBOL}..."
+    )
+
+    bootstrap_service = IntradayBootstrapService(
+        tick_repository=historical_tick_repository,
+        renko_service=renko_service,
+    )
+
+    bootstrap_result = bootstrap_service.replay_day(
+        symbol=HISTORICAL_SYMBOL,
+        target_date=date.today().isoformat(),
+        source_type="FUTURES",
+        price_source="last",
+    )
+
+    print(
+        "Bootstrap intraday concluído: "
+        f"{bootstrap_result['processed_ticks']} ticks"
+    )
+
+    source_handoff_service = SourceHandoffService(
+        last_bootstrap_timestamp_ms=(
+            bootstrap_result["last_timestamp_ms"]
+        ),
+        from_source="FUTURES",
+        from_symbol=HISTORICAL_SYMBOL,
+        to_source="CFD",
+        to_symbol=INTRADAY_SYMBOL,
+    )
+
+    if bootstrap_result["last_timestamp_ms"] is not None:
+        print(
+            "Último tick do bootstrap: "
+            f"{bootstrap_result['last_timestamp_ms']}"
+        )
 
 
     # --------------------------------------------------------
@@ -262,7 +380,7 @@ async def lifespan(app: FastAPI):
     # --------------------------------------------------------
 
     market_service.subscribe(
-        intraday_pipeline.process_realtime_tick
+        handle_realtime_tick
     )
 
     market_service.start()
@@ -292,7 +410,7 @@ async def lifespan(app: FastAPI):
     if intraday_pipeline is not None:
 
         market_service.unsubscribe(
-            intraday_pipeline.process_realtime_tick
+            handle_realtime_tick
         )
 
 
@@ -580,11 +698,25 @@ def renko_by_size(
         }
 
 
-    bricks = get_intraday_bricks(
+    intraday_bricks = get_intraday_bricks(
         brick_size
     )
 
-    recent_bricks = bricks[-100:]
+    historical_bricks = (
+        historical_repository
+        .get_recent_closed_bricks(
+            HISTORICAL_SYMBOL,
+            brick_size,
+            100,
+        )
+    )
+
+    combined_bricks = (
+        historical_bricks +
+        intraday_bricks
+    )
+
+    recent_bricks = combined_bricks[-100:]
 
 
     return {
@@ -601,7 +733,13 @@ def renko_by_size(
             True,
 
         "brick_count":
-            len(bricks),
+            len(recent_bricks),
+
+        "historical_brick_count":
+            len(historical_bricks),
+
+        "intraday_brick_count":
+            len(intraday_bricks),
 
         "latest_brick":
             get_latest_intraday_brick(

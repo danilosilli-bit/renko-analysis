@@ -6,7 +6,10 @@ from config.storage_config import (
 
 from storage.sqlite_manager import SQLiteManager
 from storage.intraday_tick_repository import IntradayTickRepository
-from storage.renko_repository import RenkoRepository
+
+from storage.intraday_renko_repository import (
+    IntradayRenkoRepository,
+)
 
 
 class IntradayRepository:
@@ -29,8 +32,10 @@ class IntradayRepository:
             self.ticks_db
         )
 
-        self.renko_repository = RenkoRepository(
-            self.renko_db
+        self.renko_repository = (
+            IntradayRenkoRepository(
+                self.renko_db
+            )
         )
 
     def prepare_symbol(self, symbol: str):
@@ -61,6 +66,8 @@ class IntradayRepository:
             self.ticks_db
         )
 
-        self.renko_repository = RenkoRepository(
-            self.renko_db
+        self.renko_repository = (
+            IntradayRenkoRepository(
+                self.renko_db
+            )
         )

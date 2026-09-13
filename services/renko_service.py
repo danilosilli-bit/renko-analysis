@@ -198,49 +198,54 @@ class RenkoService:
     def process_intraday_tick(
         self,
         tick: IntradayTick,
-    ) -> None:
-
+    ):
         renko_tick = intraday_to_renko_tick(
             tick
         )
 
         for brick_size in self.brick_sizes:
 
-            engine = self.engines[
+            engine = self.engines.get(
                 brick_size
-            ]
-
-            repository = self.repositories[
-                brick_size
-            ]
-
-            previous_count = (
-                self._brick_counts[
-                    brick_size
-                ]
             )
 
-            engine.process_tick(
-                renko_tick
+            repository = self.repositories.get(
+                brick_size
             )
 
-            current_count = len(
+            if engine is None or repository is None:
+                continue
+
+            bricks_before = len(
                 repository.bricks
             )
 
-            if current_count <= previous_count:
+            repository.set_source_transition(
+                tick.source_transition
+            )
+
+            try:
+                engine.process_tick(
+                    renko_tick
+                )
+            finally:
+                repository.set_source_transition(
+                    False
+                )
+
+            bricks_after = len(
+                repository.bricks
+            )
+
+            if bricks_after <= bricks_before:
                 continue
 
             new_bricks = repository.bricks[
-                previous_count:
+                bricks_before:bricks_after
             ]
 
-            self._brick_counts[
-                brick_size
-            ] = current_count
 
             for brick in new_bricks:
-
                 self._notify(
                     brick_size,
                     brick,

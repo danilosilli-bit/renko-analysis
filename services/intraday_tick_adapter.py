@@ -5,6 +5,7 @@ from market.realtime_tick import RealtimeTick
 def realtime_to_intraday_tick(
     tick: RealtimeTick,
     source_type: str = "CFD",
+    source_transition: bool = False,
 ) -> IntradayTick:
 
     return IntradayTick(
@@ -31,4 +32,6 @@ def realtime_to_intraday_tick(
         source_type=source_type,
         source_symbol=tick.symbol,
         price_source=tick.source_price,
+        
+        source_transition=source_transition,
     )

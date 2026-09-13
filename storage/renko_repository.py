@@ -190,6 +190,36 @@ class RenkoRepository:
 
         return result[0] if result else None
 
+    def get_recent_closed_bricks(
+        self,
+        symbol,
+        brick_size,
+        limit=50,
+    ):
+
+        table_name = self.get_table_name(
+            symbol
+        )
+
+        query = f"""
+            SELECT *
+            FROM {table_name}
+            WHERE brick_size = ?
+            ORDER BY close_time DESC
+            LIMIT ?
+        """
+
+        result = self.db.execute(
+            query,
+            (
+                brick_size,
+                limit,
+            )
+        )
+
+        return list(
+            reversed(result)
+        )
 
     def get_table_name(self, symbol):
         return f"renko_{symbol.lower()}"
