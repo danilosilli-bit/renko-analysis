@@ -57,6 +57,65 @@ const description =
 const RENKO_SIZES =
     [10, 30, 45];
 
+let selectedMarket = "CFD";
+
+const marketCfdButton =
+    document.getElementById("market-cfd");
+
+const marketWinButton =
+    document.getElementById("market-win");
+
+function setSelectedMarket(
+    market
+) {
+    selectedMarket = market;
+
+    marketCfdButton?.classList.toggle(
+        "active",
+        market === "CFD"
+    );
+
+    marketWinButton?.classList.toggle(
+        "active",
+        market === "WIN"
+    );
+
+    symbol.textContent =
+        market === "WIN"
+            ? "WINV26"
+            : "Bra50Oct26";
+
+    const chartSymbols =
+        document.querySelectorAll(
+            ".chart-symbol"
+        );
+
+    chartSymbols.forEach(
+        element => {
+            element.textContent =
+                market === "WIN"
+                    ? "WINV26"
+                    : "Bra50Oct26";
+        }
+    );
+}
+
+marketCfdButton?.addEventListener(
+    "click",
+    () => {
+        setSelectedMarket("CFD");
+        updateDashboard();
+    }
+);
+
+marketWinButton?.addEventListener(
+    "click",
+    () => {
+        setSelectedMarket("WIN");
+        updateDashboard();
+    }
+);
+
 
 function formatPrice(value) {
 
@@ -96,9 +155,6 @@ function setConnectionState(
         connectionStatus.textContent =
             "ONLINE";
 
-        mt5Status.textContent =
-            "CONNECTED";
-
     } else {
 
         statusDot.classList.remove(
@@ -111,12 +167,8 @@ function setConnectionState(
 
         connectionStatus.textContent =
             "OFFLINE";
-
-        mt5Status.textContent =
-            "DISCONNECTED";
     }
 }
-
 
 function updateMarketStatus(
     timeMsc
@@ -349,6 +401,43 @@ function updateRenkoPanel(
     45R
 */
 
+function resizeCanvasToContainer(canvas) {
+
+    const container =
+        canvas.parentElement;
+
+    if (!container) {
+        return;
+    }
+
+    const rect =
+        container.getBoundingClientRect();
+
+    const width =
+        Math.max(
+            Math.floor(rect.width),
+            1
+        );
+
+    const height =
+        Math.max(
+            Math.floor(rect.height),
+            1
+        );
+
+    if (
+        canvas.width !== width ||
+        canvas.height !== height
+    ) {
+
+        canvas.width =
+            width;
+
+        canvas.height =
+            height;
+    }
+}
+
 function drawRenkoChart(
     brickSize,
     bricks
@@ -373,6 +462,10 @@ function drawRenkoChart(
     if (!canvas) {
         return;
     }
+
+    resizeCanvasToContainer(
+        canvas
+    );
 
 
     const ctx =
@@ -888,45 +981,85 @@ async function loadSymbol() {
 
 
 async function loadStatus() {
-
     try {
-
-        const response =
-            await fetch(
-                "/api/status"
-            );
-
+        const response = await fetch("/api/status");
 
         if (!response.ok) {
-
-            setConnectionState(
-                false
-            );
-
+            setConnectionState(false);
             return;
         }
 
+        const data = await response.json();
 
-        const data =
-            await response.json();
+        const xpStatus = document.getElementById("xp-status");
+        const xpStatusDot = document.getElementById("xp-status-dot");
+
+        const activtradesStatus =
+            document.getElementById("activtrades-status");
+
+        const activtradesStatusDot =
+            document.getElementById("activtrades-status-dot");
+
+
+        const winConnected =
+            data.dual_feed_running === true &&
+            data.win?.received_ticks > 0;
+
+
+        const cfdConnected =
+            data.dual_feed_running === true &&
+            data.cfd?.received_ticks > 0;
+
+
+        if (xpStatus) {
+            xpStatus.textContent =
+                winConnected
+                    ? "CONNECTED"
+                    : "DISCONNECTED";
+        }
+
+        if (xpStatusDot) {
+            xpStatusDot.classList.toggle(
+                "online",
+                winConnected
+            );
+
+            xpStatusDot.classList.toggle(
+                "offline",
+                !winConnected
+            );
+        }
+
+
+        if (activtradesStatus) {
+            activtradesStatus.textContent =
+                cfdConnected
+                    ? "CONNECTED"
+                    : "DISCONNECTED";
+        }
+
+        if (activtradesStatusDot) {
+            activtradesStatusDot.classList.toggle(
+                "online",
+                cfdConnected
+            );
+
+            activtradesStatusDot.classList.toggle(
+                "offline",
+                !cfdConnected
+            );
+        }
 
 
         const connected =
-            data.mt5_connected === true &&
-            data.terminal_connected === true;
+            winConnected &&
+            cfdConnected;
 
-
-        setConnectionState(
-            connected
-        );
-
+        setConnectionState(connected);
 
     } catch (error) {
 
-        setConnectionState(
-            false
-        );
-
+        setConnectionState(false);
 
         console.error(
             "Erro status:",
@@ -937,68 +1070,42 @@ async function loadStatus() {
 
 
 async function loadTick() {
-
     try {
-
-        const response =
-            await fetch(
-                "/api/tick"
-            );
-
+        const response = await fetch("/api/tick");
 
         if (!response.ok) {
             return;
         }
 
+        const data = await response.json();
 
-        const data =
-            await response.json();
+        const tick =
+            selectedMarket === "WIN"
+                ? data.win
+                : data.cfd;
 
-
-        if (
-            data.status ===
-            "WAITING_FOR_TICK"
-        ) {
-
-            updateMarketStatus(
-                null
-            );
-
+        if (!tick) {
+            updateMarketStatus(null);
             return;
         }
 
-
         bid.textContent =
-            formatPrice(
-                data.bid
-            );
-
+            formatPrice(tick.bid);
 
         ask.textContent =
-            formatPrice(
-                data.ask
-            );
-
+            formatPrice(tick.ask);
 
         last.textContent =
-            formatPrice(
-                data.last
-            );
-
+            formatPrice(tick.last);
 
         spread.textContent =
-            formatPrice(
-                data.spread
-            );
-
+            formatPrice(tick.spread);
 
         updateMarketStatus(
-            data.time_msc
+            tick.time_msc
         );
 
-
     } catch (error) {
-
         console.error(
             "Erro tick:",
             error
@@ -1011,39 +1118,84 @@ async function loadRenkoPanels() {
 
     try {
 
-        const response =
-            await fetch(
-                "/api/renko"
+        const baseEndpoint =
+            selectedMarket === "WIN"
+                ? "/api/renko-win"
+                : "/api/renko";
+
+
+        const responses =
+            await Promise.all(
+
+                RENKO_SIZES.map(
+                    brickSize =>
+                        fetch(
+                            `${baseEndpoint}/${brickSize}`
+                        )
+                )
             );
 
 
-        if (!response.ok) {
-            return;
-        }
+        const dataList =
+            await Promise.all(
 
+                responses.map(
+                    async response => {
 
-        const data =
-            await response.json();
+                        if (!response.ok) {
+                            return null;
+                        }
 
-
-        if (
-            data.initialized !== true ||
-            !data.renko
-        ) {
-            return;
-        }
+                        return await response.json();
+                    }
+                )
+            );
 
 
         RENKO_SIZES.forEach(
-            brickSize => {
+            (brickSize, index) => {
+
+                const data =
+                    dataList[index];
+
+                if (
+                    !data ||
+                    data.initialized !== true
+                ) {
+                    return;
+                }
+
+
+                const recentBricks =
+                    data.recent_bricks || [];
+
+
+                const latestBrick =
+                    data.latest_brick ||
+                    data.latest_intraday_brick ||
+                    (
+                        recentBricks.length > 0
+                            ? recentBricks[
+                                recentBricks.length - 1
+                            ]
+                            : null
+                    );
+
 
                 updateRenkoPanel(
                     brickSize,
-                    data.renko[
-                        String(
-                            brickSize
-                        )
-                    ]
+                    {
+                        state:
+                            data.state,
+
+                        brick_count:
+                            data.intraday_brick_count ??
+                            data.brick_count ??
+                            recentBricks.length,
+
+                        latest_brick:
+                            latestBrick
+                    }
                 );
             }
         );
@@ -1058,16 +1210,21 @@ async function loadRenkoPanels() {
     }
 }
 
-
 async function loadRenkoChart(
     brickSize
 ) {
 
     try {
 
+        const baseEndpoint =
+            selectedMarket === "WIN"
+                ? "/api/renko-win"
+                : "/api/renko";
+
+
         const response =
             await fetch(
-                `/api/renko/${brickSize}`
+                `${baseEndpoint}/${brickSize}`
             );
 
 

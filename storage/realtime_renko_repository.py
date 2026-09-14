@@ -6,6 +6,7 @@ class RealtimeRenkoRepository:
         intraday_repository,
         historical_symbol,
         intraday_symbol,
+        defer_persistence: bool = False,
     ):
         self.historical_repository = (
             historical_repository
@@ -21,6 +22,10 @@ class RealtimeRenkoRepository:
 
         self.intraday_symbol = (
             intraday_symbol
+        )
+
+        self.defer_persistence = (
+            defer_persistence
         )
 
         self.bricks = []
@@ -76,15 +81,33 @@ class RealtimeRenkoRepository:
             "source_transition"
         ] = self.source_transition
 
-        self.intraday_repository.save_brick(
-            self.intraday_symbol,
-            brick_to_save,
-        )
-
+        # Primeiro mantém o brick em memória.
         self.bricks.append(
             brick_to_save
         )
 
+        # No realtime normal continua gravando imediatamente.
+        # No bootstrap, com defer_persistence=True,
+        # apenas acumula em memória.
+        if not self.defer_persistence:
+
+            self.intraday_repository.save_brick(
+                self.intraday_symbol,
+                brick_to_save,
+            )
+
+    def persist_bricks(
+        self,
+        target_symbols,
+    ):
+        for brick in self.bricks:
+
+            for target_symbol in target_symbols:
+
+                self.intraday_repository.save_brick(
+                    target_symbol,
+                    brick,
+                )
 
     def save_state(
         self,

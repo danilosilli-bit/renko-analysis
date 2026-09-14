@@ -10,8 +10,9 @@ class IntradayMarketPipeline:
     """
     Pipeline intraday:
 
-    1. persiste o tick recebido;
-    2. envia o tick ao RenkoService.
+    1. converte o RealtimeTick para IntradayTick;
+    2. persiste o tick recebido;
+    3. envia o tick ao RenkoService.
     """
 
     def __init__(
@@ -19,10 +20,12 @@ class IntradayMarketPipeline:
         tick_repository,
         renko_service,
         symbol: str,
+        source_type: str,
     ):
         self.tick_repository = tick_repository
         self.renko_service = renko_service
         self.symbol = symbol
+        self.source_type = source_type
 
     def process_realtime_tick(
         self,
@@ -32,8 +35,8 @@ class IntradayMarketPipeline:
 
         intraday_tick = realtime_to_intraday_tick(
             tick,
-            source_type="CFD",
-            source_transition=source_transition
+            source_type=self.source_type,
+            source_transition=source_transition,
         )
 
         self.process_tick(

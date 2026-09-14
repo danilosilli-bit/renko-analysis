@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from collections.abc import Callable
 
 from market.realtime_tick import RealtimeTick
@@ -46,6 +48,8 @@ class InMemoryRenkoRepository:
 
     def get_state(self, symbol, brick_size):
         return self.states.get((symbol, brick_size))
+
+
 
     def get_last_closed_brick(self, symbol, brick_size):
         matching = [
@@ -113,6 +117,7 @@ class RenkoService:
         intraday_repository,
         historical_symbol: str,
         intraday_symbol: str,
+        defer_persistence: bool = False,
     ) -> None:
 
         for brick_size in self.brick_sizes:
@@ -122,6 +127,7 @@ class RenkoService:
                 intraday_repository=intraday_repository,
                 historical_symbol=historical_symbol,
                 intraday_symbol=intraday_symbol,
+                defer_persistence=defer_persistence,
             )
 
             engine = RenkoEngine(
@@ -287,6 +293,88 @@ class RenkoService:
             return None
 
         return engine.state
+
+    def get_runtime_snapshot(self) -> dict:
+
+        snapshot = {}
+
+        for brick_size in self.brick_sizes:
+
+            engine = self.engines.get(
+                brick_size
+            )
+
+            if engine is None:
+                continue
+
+            snapshot[brick_size] = {
+                "state": deepcopy(
+                    engine.state
+                ),
+                "last_closed_brick": deepcopy(
+                    engine.last_closed_brick
+                ),
+            }
+
+        return snapshot
+
+    def initialize_from_snapshot(
+        self,
+        snapshot: dict,
+        intraday_repository,
+        intraday_symbol: str,
+    ) -> None:
+
+        for brick_size in self.brick_sizes:
+
+            snapshot_data = snapshot.get(
+                brick_size
+            )
+
+            if snapshot_data is None:
+                raise ValueError(
+                    f"Snapshot não encontrado "
+                    f"para {brick_size}R"
+                )
+
+            repository = (
+                RealtimeRenkoRepository(
+                    historical_repository=None,
+                    intraday_repository=intraday_repository,
+                    historical_symbol=self.symbol,
+                    intraday_symbol=intraday_symbol,
+                    defer_persistence=False,
+                )
+            )
+
+            engine = RenkoEngine(
+                symbol=self.symbol,
+                brick_size=brick_size,
+                renko_repository=repository,
+                persist_state_every_tick=False,
+            )
+
+            engine.state = deepcopy(
+                snapshot_data["state"]
+            )
+
+            engine.last_closed_brick = deepcopy(
+                snapshot_data[
+                    "last_closed_brick"
+                ]
+            )
+
+            self.repositories[
+                brick_size
+            ] = repository
+
+            self.engines[
+                brick_size
+            ] = engine
+
+            self._brick_counts[
+                brick_size
+            ] = 0
 
     def flush(self) -> None:
         for engine in self.engines.values():

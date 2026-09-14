@@ -14,7 +14,7 @@ class RealtimeTick:
 
     last: float
 
-    source_price: str = "bid"
+    source_price: str
 
 
 def from_mt5_tick(
@@ -22,17 +22,50 @@ def from_mt5_tick(
     tick: dict,
 ) -> RealtimeTick:
 
-    bid = float(tick["bid"])
-    ask = float(tick["ask"])
-    last = float(tick.get("last", 0.0))
+    bid = float(
+        tick["bid"]
+    )
+
+    ask = float(
+        tick["ask"]
+    )
+
+    last = float(
+        tick.get(
+            "last",
+            0.0,
+        )
+    )
+
+    # ========================================================
+    # SELEÇÃO DA FONTE DE PREÇO
+    #
+    # FUTUROS / WIN:
+    # LAST disponível -> usa LAST
+    #
+    # CFD / Bra50:
+    # LAST = 0 -> usa BID
+    # ========================================================
+
+    if last > 0:
+
+        price = last
+        source_price = "last"
+
+    else:
+
+        price = bid
+        source_price = "bid"
 
     return RealtimeTick(
         symbol=symbol,
-        timestamp_ms=int(tick["time_msc"]),
-        price=bid,
+        timestamp_ms=int(
+            tick["time_msc"]
+        ),
+        price=price,
         bid=bid,
         ask=ask,
         spread=ask - bid,
         last=last,
-        source_price="bid",
+        source_price=source_price,
     )
