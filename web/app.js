@@ -57,6 +57,36 @@ const description =
 const RENKO_SIZES =
     [10, 30, 45];
 
+
+const renkoChartCache = {
+    CFD: {},
+    WIN: {}
+};
+
+for (const market of ["CFD", "WIN"]) {
+
+    for (const brickSize of RENKO_SIZES) {
+
+        renkoChartCache[market][brickSize] = {
+            closedBricks: [],
+            state: null,
+            latestClosedKey: null
+        };
+    }
+}
+
+function getRenkoBrickKey(brick) {
+    if (!brick) {
+        return null;
+    }
+
+    return [
+        brick.close_time,
+        brick.open,
+        brick.close
+    ].join("|");
+}
+
 let selectedMarket = "CFD";
 
 const marketCfdButton =
@@ -102,17 +132,27 @@ function setSelectedMarket(
 
 marketCfdButton?.addEventListener(
     "click",
-    () => {
+    async () => {
+
         setSelectedMarket("CFD");
-        updateDashboard();
+
+        await Promise.all([
+            updateDashboard(),
+            loadRenkoCharts()
+        ]);
     }
 );
 
 marketWinButton?.addEventListener(
     "click",
-    () => {
+    async () => {
+
         setSelectedMarket("WIN");
-        updateDashboard();
+
+        await Promise.all([
+            updateDashboard(),
+            loadRenkoCharts()
+        ]);
     }
 );
 
@@ -440,7 +480,8 @@ function resizeCanvasToContainer(canvas) {
 
 function drawRenkoChart(
     brickSize,
-    bricks
+    bricks,
+    openState = null
 ) {
 
     const canvas =
@@ -516,12 +557,34 @@ function drawRenkoChart(
         Até 50 bricks por gráfico.
     */
 
-    const visibleBricks =
-        bricks.slice(-50);
+    const closedBricks =
+        bricks.slice(
+            openState ? -49 : -50
+        );
+
+        const visibleBricks =
+            openState
+                ? [
+                    ...closedBricks,
+                    {
+                        open: openState.open,
+                        close: openState.last,
+                        high: openState.high,
+                        low: openState.low,
+                        direction:
+                            Number(openState.last) >=
+                            Number(openState.open)
+                                ? "UP"
+                                : "DOWN",
+                        source_transition: false,
+                        is_open: true
+                    }
+                ]
+                : closedBricks;
 
 
     countElement.textContent =
-        `${visibleBricks.length} bricks`;
+        `${closedBricks.length} bricks`;
 
 
     /*
@@ -611,7 +674,7 @@ function drawRenkoChart(
     */
 
     const paddingTop = 30;
-    const paddingBottom = 30;
+    const paddingBottom = 50;
     const paddingLeft = 80;
     const paddingRight = 25;
 
@@ -871,7 +934,24 @@ function drawRenkoChart(
                 brick.source_transition === true ||
                 brick.source_transition === 1;
 
+            const isOpen =
+                brick.is_open === true;
+
             if (
+                isOpen
+            ) {
+
+                ctx.fillStyle =
+                    direction === "UP"
+                        ? "rgba(34, 197, 94, 0.35)"
+                        : "rgba(239, 68, 68, 0.35)";
+
+                ctx.strokeStyle =
+                    direction === "UP"
+                        ? "#4ade80"
+                        : "#f87171";
+
+            } else if (
                 sourceTransition
             ) {
 
@@ -940,6 +1020,84 @@ function drawRenkoChart(
             );
         }
     );
+
+    /*
+        EIXO X - HORÁRIOS
+    */
+
+    const timeLabelCount = 5;
+
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "11px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    for (
+        let labelIndex = 0;
+        labelIndex < timeLabelCount;
+        labelIndex++
+    ) {
+
+        const brickIndex =
+            Math.round(
+                labelIndex *
+                (visibleBricks.length - 1) /
+                (timeLabelCount - 1)
+            );
+
+        const brick =
+            visibleBricks[brickIndex];
+
+        if (
+            !brick ||
+            !brick.close_time
+        ) {
+            continue;
+        }
+
+        const date =
+            new Date(
+                brick.close_time
+            );
+
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
+            continue;
+        }
+
+        const timeText =
+            date.toLocaleTimeString(
+                "pt-BR",
+                {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false
+                }
+            );
+
+        const x =
+            startX +
+            brickIndex *
+            (
+                brickWidth +
+                gap
+            ) +
+            brickWidth / 2;
+
+        const y =
+            paddingTop +
+            chartHeight +
+            10;
+
+        ctx.fillText(
+            timeText,
+            x,
+            y
+        );
+    }    
 }
 
 
@@ -1250,9 +1408,36 @@ async function loadRenkoChart(
         }
 
 
+        const cache =
+            renkoChartCache[
+                selectedMarket
+            ][
+                brickSize
+            ];
+
+        cache.closedBricks =
+            data.recent_bricks || [];
+
+        cache.state =
+            data.state || null;
+
+        const lastClosedBrick =
+            cache.closedBricks.length > 0
+                ? cache.closedBricks[
+                    cache.closedBricks.length - 1
+                ]
+                : null;
+
+        cache.latestClosedKey =
+            lastClosedBrick
+                ? `${lastClosedBrick.close_time}|${lastClosedBrick.open}|${lastClosedBrick.close}`
+                : null;
+
+
         drawRenkoChart(
             brickSize,
-            data.recent_bricks || []
+            cache.closedBricks,
+            cache.state
         );
 
 
@@ -1262,6 +1447,50 @@ async function loadRenkoChart(
             `Erro gráfico ${brickSize}R:`,
             error
         );
+    }
+}
+
+async function loadRenkoRealtime(
+    brickSize
+) {
+    try {
+
+        const baseEndpoint =
+            selectedMarket === "WIN"
+                ? "/api/renko-win"
+                : "/api/renko";
+
+        const response =
+            await fetch(
+                `${baseEndpoint}/${brickSize}/realtime`,
+                {
+                    cache: "no-store"
+                }
+            );
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            data.initialized !== true
+        ) {
+            return null;
+        }
+
+        return data;
+
+    } catch (error) {
+
+        console.error(
+            `Erro realtime ${brickSize}R:`,
+            error
+        );
+
+        return null;
     }
 }
 
@@ -1280,6 +1509,10 @@ async function loadRenkoCharts() {
 }
 
 
+/*
+    ATUALIZAÇÃO GERAL DO DASHBOARD
+*/
+
 async function updateDashboard() {
 
     await Promise.all([
@@ -1288,13 +1521,120 @@ async function updateDashboard() {
 
         loadTick(),
 
-        loadRenkoPanels(),
-
-        loadRenkoCharts()
+        loadRenkoPanels()
 
     ]);
 }
 
+
+/*
+    ATUALIZAÇÃO DOS GRÁFICOS RENKO
+*/
+
+async function updateRenkoRealtime() {
+    await Promise.all(
+        RENKO_SIZES.map(
+            async brickSize => {
+                const marketAtRequest =
+                    selectedMarket;
+
+                const data =
+                    await loadRenkoRealtime(
+                        brickSize
+                    );
+
+                if (
+                    !data ||
+                    !data.state
+                ) {
+                    return;
+                }
+
+                // Se o usuário mudou de mercado
+                // enquanto a requisição estava em andamento,
+                // ignoramos a resposta antiga.
+                if (
+                    marketAtRequest !==
+                    selectedMarket
+                ) {
+                    return;
+                }
+
+                const cache =
+                    renkoChartCache[
+                        marketAtRequest
+                    ][
+                        brickSize
+                    ];
+
+                if (
+                    !cache ||
+                    cache.closedBricks.length === 0
+                ) {
+                    return;
+                }
+
+                const runtimeBricks =
+                    data.runtime_bricks || [];
+
+                for (
+                    const brick
+                    of runtimeBricks
+                ) {
+                    const brickKey =
+                        getRenkoBrickKey(
+                            brick
+                        );
+
+                    const alreadyExists =
+                        cache.closedBricks.some(
+                            cachedBrick =>
+                                getRenkoBrickKey(
+                                    cachedBrick
+                                ) === brickKey
+                        );
+
+                    if (!alreadyExists) {
+                        cache.closedBricks.push(
+                            brick
+                        );
+                    }
+                }
+
+                // Mantém somente os últimos
+                // 50 fechados no cache.
+                if (
+                    cache.closedBricks.length >
+                    50
+                ) {
+                    cache.closedBricks =
+                        cache.closedBricks.slice(
+                            -50
+                        );
+                }
+
+                cache.state =
+                    data.state;
+
+                const lastClosedBrick =
+                    cache.closedBricks[
+                        cache.closedBricks.length - 1
+                    ];
+
+                cache.latestClosedKey =
+                    getRenkoBrickKey(
+                        lastClosedBrick
+                    );
+
+                drawRenkoChart(
+                    brickSize,
+                    cache.closedBricks,
+                    cache.state
+                );
+            }
+        )
+    );
+}
 
 /*
     INICIALIZAÇÃO
@@ -1304,8 +1644,16 @@ loadSymbol();
 
 updateDashboard();
 
+loadRenkoCharts();
+
 
 setInterval(
     updateDashboard,
     1000
+);
+
+
+setInterval(
+    updateRenkoRealtime,
+    250
 );

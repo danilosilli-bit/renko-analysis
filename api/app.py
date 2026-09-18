@@ -1557,6 +1557,70 @@ def renko_by_size(
             ),
     }
 
+# ============================================================
+# RENKO CFD - REALTIME
+#
+# Endpoint leve para atualização rápida do gráfico.
+# Não consulta histórico nem reconstrói a série Renko.
+# ============================================================
+
+@app.get(
+    "/api/renko/{brick_size}/realtime"
+)
+def renko_realtime_by_size(
+    brick_size: int,
+):
+
+    if brick_size not in BRICK_SIZES:
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Renko {brick_size}R "
+                f"não configurado."
+            ),
+        )
+
+    if not renko_initialized:
+
+        return {
+            "brick_size":
+                brick_size,
+
+            "initialized":
+                False,
+        }
+
+    return {
+        "brick_size":
+            brick_size,
+
+        "initialized":
+            True,
+
+        "runtime_bricks":
+            cfd_renko_service
+            .get_runtime_bricks(
+                brick_size
+            ),
+
+        "runtime_brick_count":
+            len(
+                cfd_renko_service
+                .get_runtime_bricks(
+                    brick_size
+                )
+            ),
+
+        "state":
+            serialize_state(
+                cfd_renko_service
+                .get_state(
+                    brick_size
+                )
+            ),
+    }
+
 
 # ============================================================
 # RENKO WIN
@@ -1650,6 +1714,70 @@ def renko_win_by_size(
 
         "recent_bricks":
             recent_bricks,
+
+        "state":
+            serialize_state(
+                win_renko_service
+                .get_state(
+                    brick_size
+                )
+            ),
+    }
+
+# ============================================================
+# RENKO WIN - REALTIME
+#
+# Endpoint leve para atualização rápida do gráfico.
+# Não consulta histórico nem reconstrói a série Renko.
+# ============================================================
+
+@app.get(
+    "/api/renko-win/{brick_size}/realtime"
+)
+def renko_win_realtime_by_size(
+    brick_size: int,
+):
+
+    if brick_size not in BRICK_SIZES:
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Renko {brick_size}R "
+                f"não configurado."
+            ),
+        )
+
+    if not renko_initialized:
+
+        return {
+            "brick_size":
+                brick_size,
+
+            "initialized":
+                False,
+        }
+
+    return {
+        "brick_size":
+            brick_size,
+
+        "initialized":
+            True,
+
+        "runtime_bricks":
+            win_renko_service
+            .get_runtime_bricks(
+                brick_size
+            ),
+
+        "runtime_brick_count":
+            len(
+                win_renko_service
+                .get_runtime_bricks(
+                    brick_size
+                )
+            ),
 
         "state":
             serialize_state(

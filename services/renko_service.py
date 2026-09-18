@@ -286,6 +286,20 @@ class RenkoService:
         # Não devolve seed.
         return repository.bricks[1:].copy()
 
+    def get_runtime_bricks(
+        self,
+        brick_size: int,
+    ) -> list[dict]:
+
+        repository = self.repositories.get(
+            brick_size
+        )
+
+        if repository is None:
+            return []
+
+        return repository.bricks.copy()
+
     def get_state(self, brick_size: int):
         engine = self.engines.get(brick_size)
 
@@ -295,24 +309,35 @@ class RenkoService:
         return engine.state
 
     def get_runtime_snapshot(self) -> dict:
-
         snapshot = {}
 
         for brick_size in self.brick_sizes:
-
-            engine = self.engines.get(
-                brick_size
-            )
+            engine = self.engines.get(brick_size)
 
             if engine is None:
                 continue
+
+            last_closed_brick = (
+                engine.last_closed_brick
+            )
+
+            if (
+                last_closed_brick is not None
+                and not isinstance(
+                    last_closed_brick,
+                    dict,
+                )
+            ):
+                last_closed_brick = dict(
+                    last_closed_brick
+                )
 
             snapshot[brick_size] = {
                 "state": deepcopy(
                     engine.state
                 ),
                 "last_closed_brick": deepcopy(
-                    engine.last_closed_brick
+                    last_closed_brick
                 ),
             }
 
