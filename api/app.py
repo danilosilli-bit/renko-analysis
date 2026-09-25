@@ -1,9 +1,25 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from api.routers.trading import (
+    configure_trading_router,
+    router as trading_router,
+)
+
+from trading.broker_router import (
+    BrokerRouter,
+)
+
+from trading.trading_service import (
+    TradingService,
+)
+
+
 
 from config.storage_config import (
     HISTORICAL_RENKO_DB,
@@ -158,6 +174,9 @@ win_source_handoff_service = None
 cfd_source_handoff_service = None
 
 dual_feed_service = None
+
+broker_router = None
+trading_service = None
 
 renko_initialized = False
 
@@ -457,6 +476,7 @@ async def lifespan(app: FastAPI):
     global cfd_source_handoff_service
 
     global dual_feed_service
+    global trading_service
 
     global renko_initialized
     global bootstrap_result
@@ -1091,18 +1111,43 @@ async def lifespan(app: FastAPI):
         "Dual MT5 Feed iniciado."
     )
 
-    print("")
-    print(
-        "XP          -> WINV26      -> LAST"
+
+    # ========================================================
+    # TRADING
+    # ========================================================
+
+    broker_router = BrokerRouter()
+
+
+    broker_router.register(
+        broker_id="xp",
+        feed_service=dual_feed_service,
+        feed="WIN",
+        symbol=HISTORICAL_SYMBOL,
     )
 
-    print(
-        "ActivTrades -> Bra50Oct26  -> BID"
+
+    broker_router.register(
+        broker_id="activtrades",
+        feed_service=dual_feed_service,
+        feed="CFD",
+        symbol=dual_feed_service.cfd_symbol,
     )
 
-    print("")
+
+    trading_service = TradingService(
+        broker_router=broker_router,
+        broker_id="xp",
+    )
+
+
+    configure_trading_router(
+        trading_service
+    )
+
+
     print(
-        "Aguardando ticks realtime..."
+        "Trading Service configurado."
     )
 
 
@@ -1141,6 +1186,11 @@ app = FastAPI(
     title="Renko Analysis API",
     version="0.5.0",
     lifespan=lifespan,
+)
+
+
+app.include_router(
+    trading_router
 )
 
 
@@ -1254,6 +1304,7 @@ def status():
                 ),
         },
     }
+
 
 
 # ============================================================

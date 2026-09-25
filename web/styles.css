@@ -1,0 +1,478 @@
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0b1220;
+            color: #e5e7eb;
+        }
+
+        .dashboard {
+            width: 100vw;
+            height: 100vh;
+            padding: 6px;
+            display: grid;
+            grid-template-rows: 48px minmax(0, 1fr);
+            gap: 6px;
+        }
+
+        /* =====================================================
+           BARRA SUPERIOR
+           ===================================================== */
+
+        .topbar {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 0 14px;
+            background: #111827;
+            border: 1px solid #26364a;
+            border-radius: 6px;
+            overflow: hidden;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        .top-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .top-label {
+            color: #7f8da3;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .top-value {
+            font-weight: 700;
+            color: #e5e7eb;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 700;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #6b7280;
+            flex: 0 0 auto;
+        }
+
+        .status-dot.online {
+            background: #22c55e;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+        }
+
+        .market-status {
+            font-weight: 700;
+        }
+
+        .market-live {
+            color: #22c55e;
+        }
+
+        .market-stale {
+            color: #f59e0b;
+        }
+
+        .market-offline {
+            color: #ef4444;
+        }
+
+        /* =====================================================
+           ÁREA PRINCIPAL
+           ===================================================== */
+
+        .main-layout {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 220px;
+            gap: 6px;
+        }
+
+        .charts-area {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: minmax(0, 1.62fr) minmax(0, 1fr);
+            gap: 6px;
+        }
+
+        .secondary-row {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 6px;
+        }
+
+        .chart-card {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: 44px minmax(0, 1fr);
+            background: #101927;
+            border: 1px solid #26364a;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .chart-card.secondary {
+            grid-template-rows: 38px minmax(0, 1fr);
+        }
+
+        .chart-header {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 10px;
+            border-bottom: 1px solid #202f42;
+        }
+
+        .chart-title-block {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+
+        .chart-title {
+            margin: 0;
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .secondary .chart-title {
+            font-size: 13px;
+        }
+
+        .chart-symbol {
+            color: #8fa0b8;
+            font-size: 10px;
+        }
+
+        .chart-metrics {
+            min-width: 0;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 14px;
+            overflow: hidden;
+        }
+
+        .metric {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .metric-label {
+            color: #708096;
+            font-size: 9px;
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            color: #e5e7eb;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .secondary .chart-metrics {
+            gap: 8px;
+        }
+
+        .secondary .metric-label {
+            display: none;
+        }
+
+        .secondary .metric-value {
+            font-size: 10px;
+        }
+
+        .chart-count {
+            color: #8fa0b8;
+            font-size: 10px;
+            white-space: nowrap;
+        }
+
+        .renko-chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            background: #0d1522;
+            overflow: hidden;
+        }
+
+        .renko-chart {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .chart-empty {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 11px;
+            pointer-events: none;
+        }
+
+        .renko-up {
+            color: #22c55e;
+        }
+
+        .renko-down {
+            color: #ef4444;
+        }
+
+        /* Elementos atualizados pelo app.js, mas que não precisam
+           ocupar espaço no layout. */
+        .renko-latest {
+            display: none;
+        }
+
+        /* =====================================================
+           PAINEL DIREITO
+           ===================================================== */
+
+        .side-panel {
+            min-width: 0;
+            min-height: 0;
+            padding: 10px;
+            background: #101927;
+            border: 1px solid #26364a;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel-section {
+            padding-bottom: 12px;
+            border-bottom: 1px solid #26364a;
+        }
+
+        .panel-section:last-child {
+            border-bottom: 0;
+        }
+
+        .panel-title {
+            margin-bottom: 9px;
+            color: #9fb0c6;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .quote-row,
+        .position-row {
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .quote-label,
+        .position-label {
+            color: #9ca3af;
+            font-size: 11px;
+        }
+
+        .quote-value {
+            font-size: 18px;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .quote-row.compact .quote-value {
+            font-size: 14px;
+        }
+
+        .position-value {
+            font-size: 11px;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .trading-actions {
+            margin-top: auto;
+            display: grid;
+            gap: 8px;
+        }
+
+        .trade-button {
+            width: 100%;
+            height: 38px;
+            border: 0;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        .trade-button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        .buy-button {
+            background: #16a34a;
+        }
+
+        .sell-button {
+            background: #dc2626;
+        }
+
+        .close-button {
+            background: #334155;
+        }
+
+
+        /* =====================================================
+           SELETOR DE MERCADO / STATUS DOS FEEDS
+           ===================================================== */
+
+        .feed-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 700;
+        }
+
+        .feed-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #6b7280;
+            flex: 0 0 auto;
+        }
+
+        .feed-dot.live {
+            background: #22c55e;
+        }
+
+        .feed-dot.waiting {
+            background: #f59e0b;
+        }
+
+        .feed-dot.offline {
+            background: #ef4444;
+        }
+
+        .market-switch {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px;
+            gap: 2px;
+            border: 1px solid #334155;
+            border-radius: 5px;
+            background: #0d1522;
+        }
+
+        .market-switch-button {
+            height: 24px;
+            padding: 0 10px;
+            border: 0;
+            border-radius: 3px;
+            background: transparent;
+            color: #8fa0b8;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .market-switch-button.active {
+            background: #26364a;
+            color: #ffffff;
+        }
+
+        /* =====================================================
+           AJUSTES PARA TELAS MENORES
+           ===================================================== */
+
+        @media (max-width: 1050px) {
+            .main-layout {
+                grid-template-columns: minmax(0, 1fr) 190px;
+            }
+
+            .topbar {
+                gap: 10px;
+            }
+
+            .chart-metrics {
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 850px) {
+            body {
+                overflow: auto;
+            }
+
+            html,
+            body {
+                height: auto;
+                min-height: 100%;
+            }
+
+            .dashboard {
+                height: auto;
+                min-height: 100vh;
+                grid-template-rows: auto auto;
+            }
+
+            .topbar {
+                min-height: 48px;
+                flex-wrap: wrap;
+                padding: 8px 12px;
+            }
+
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .charts-area {
+                min-height: 780px;
+            }
+
+            .side-panel {
+                min-height: 420px;
+            }
+        }

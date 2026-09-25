@@ -226,6 +226,426 @@ class MT5RealtimeClient:
             for position in positions
         ]
 
+    def send_market_order(
+        self,
+        symbol: str,
+        side: str,
+        volume: float,
+        deviation: int = 20,
+        magic: int = 20260921,
+        comment: str = "renko-analysis",
+        check_only: bool = True,
+    ) -> dict[str, Any]:
+
+        self.ensure_symbol(symbol)
+
+        side = side.upper().strip()
+
+        if side not in (
+            "BUY",
+            "SELL",
+        ):
+            raise ValueError(
+                "side deve ser BUY ou SELL."
+            )
+
+        info = mt5.symbol_info(symbol)
+
+        if info is None:
+            raise RuntimeError(
+                f"symbol_info('{symbol}') "
+                f"retornou None."
+            )
+
+        tick = mt5.symbol_info_tick(symbol)
+
+        if tick is None:
+            raise RuntimeError(
+                f"symbol_info_tick('{symbol}') "
+                f"retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        if volume < info.volume_min:
+            raise ValueError(
+                f"Volume {volume} menor que "
+                f"volume_min={info.volume_min}."
+            )
+
+        if volume > info.volume_max:
+            raise ValueError(
+                f"Volume {volume} maior que "
+                f"volume_max={info.volume_max}."
+            )
+
+        if side == "BUY":
+            order_type = mt5.ORDER_TYPE_BUY
+            price = tick.ask
+        else:
+            order_type = mt5.ORDER_TYPE_SELL
+            price = tick.bid
+
+        filling_mode = int(
+            info.filling_mode
+        )
+
+        if (
+            filling_mode & 1
+        ):
+            order_filling = (
+                mt5.ORDER_FILLING_FOK
+            )
+
+        elif (
+            filling_mode & 2
+        ):
+            order_filling = (
+                mt5.ORDER_FILLING_IOC
+            )
+
+        else:
+            raise RuntimeError(
+                "Nenhum filling mode "
+                "suportado para ordem "
+                f"a mercado em {symbol}. "
+                f"filling_mode="
+                f"{filling_mode}"
+            )
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(volume),
+            "type": order_type,
+            "price": float(price),
+            "deviation": deviation,
+            "magic": magic,
+            "comment": comment,
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": order_filling,
+        }
+
+        check = mt5.order_check(
+            request
+        )
+
+        if check is None:
+            raise RuntimeError(
+                "order_check retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        check_data = check._asdict()
+
+        if (
+            "request" in check_data
+            and hasattr(
+                check_data["request"],
+                "_asdict",
+            )
+        ):
+            check_data["request"] = (
+                check_data["request"]
+                ._asdict()
+            )
+
+        if check.retcode != 0:
+            return {
+                "success": False,
+                "stage": "check",
+                "request": request,
+                "check": check_data,
+            }
+
+        if check_only:
+            return {
+                "success": True,
+                "stage": "check_only",
+                "request": request,
+                "check": check_data,
+            }
+
+        result = mt5.order_send(
+            request
+        )
+
+        if result is None:
+            raise RuntimeError(
+                "order_send retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        result_data = result._asdict()
+
+        if (
+            "request" in result_data
+            and hasattr(
+                result_data["request"],
+                "_asdict",
+            )
+        ):
+            result_data["request"] = (
+                result_data["request"]
+                ._asdict()
+            )
+
+        success = result.retcode in (
+            mt5.TRADE_RETCODE_DONE,
+            mt5.TRADE_RETCODE_DONE_PARTIAL,
+            mt5.TRADE_RETCODE_PLACED,
+        )
+
+        return {
+            "success": success,
+            "stage": "send",
+            "request": request,
+            "check": check_data,
+            "result": result_data,
+        }
+
+
+    def buy(
+        self,
+        symbol: str,
+        volume: float,
+    ) -> dict[str, Any]:
+
+        return self.send_market_order(
+            symbol=symbol,
+            side="BUY",
+            volume=volume,
+        )
+
+
+    def sell(
+        self,
+        symbol: str,
+        volume: float,
+    ) -> dict[str, Any]:
+
+        return self.send_market_order(
+            symbol=symbol,
+            side="SELL",
+            volume=volume,
+        )
+
+    def close_position(
+        self,
+        ticket: int,
+        deviation: int = 20,
+        magic: int = 20260921,
+        comment: str = "renko-analysis-close",
+        check_only: bool = True,
+    ) -> dict[str, Any]:
+
+        self.ensure_connected()
+
+        positions = mt5.positions_get(
+            ticket=ticket
+        )
+
+        if positions is None:
+            raise RuntimeError(
+                "positions_get falhou. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        if len(positions) == 0:
+            raise RuntimeError(
+                f"Posição {ticket} não encontrada."
+            )
+
+        position = positions[0]
+
+        symbol = position.symbol
+        volume = position.volume
+
+        self.ensure_symbol(
+            symbol
+        )
+
+        info = mt5.symbol_info(
+            symbol
+        )
+
+        if info is None:
+            raise RuntimeError(
+                f"symbol_info('{symbol}') "
+                f"retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        tick = mt5.symbol_info_tick(
+            symbol
+        )
+
+        if tick is None:
+            raise RuntimeError(
+                f"symbol_info_tick('{symbol}') "
+                f"retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        # Para fechar uma posição BUY,
+        # enviamos uma ordem SELL.
+        #
+        # Para fechar uma posição SELL,
+        # enviamos uma ordem BUY.
+
+        if position.type == mt5.POSITION_TYPE_BUY:
+
+            side = "SELL"
+            order_type = mt5.ORDER_TYPE_SELL
+            price = tick.bid
+
+        elif position.type == mt5.POSITION_TYPE_SELL:
+
+            side = "BUY"
+            order_type = mt5.ORDER_TYPE_BUY
+            price = tick.ask
+
+        else:
+
+            raise RuntimeError(
+                "Tipo de posição MT5 "
+                f"não reconhecido: {position.type}"
+            )
+
+        filling_mode = int(
+            info.filling_mode
+        )
+
+        if (
+            filling_mode & 1
+        ):
+            order_filling = (
+                mt5.ORDER_FILLING_FOK
+            )
+
+        elif (
+            filling_mode & 2
+        ):
+            order_filling = (
+                mt5.ORDER_FILLING_IOC
+            )
+
+        else:
+            raise RuntimeError(
+                "Nenhum filling mode "
+                "suportado para fechamento "
+                f"em {symbol}. "
+                f"filling_mode="
+                f"{filling_mode}"
+            )
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(volume),
+            "type": order_type,
+            "position": int(ticket),
+            "price": float(price),
+            "deviation": deviation,
+            "magic": magic,
+            "comment": comment,
+            "type_time": mt5.ORDER_TIME_GTC,
+             "type_filling": order_filling,
+        }
+
+        check = mt5.order_check(
+            request
+        )
+
+        if check is None:
+            raise RuntimeError(
+                "order_check retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        check_data = check._asdict()
+
+        # TradeRequest do MT5 não pode
+        # atravessar multiprocessing.Queue.
+        if (
+            "request" in check_data
+            and hasattr(
+                check_data["request"],
+                "_asdict",
+            )
+        ):
+            check_data["request"] = (
+                check_data["request"]
+                ._asdict()
+            )
+
+        if check.retcode != 0:
+            return {
+                "success": False,
+                "stage": "check",
+                "ticket": int(ticket),
+                "symbol": symbol,
+                "side": side,
+                "volume": float(volume),
+                "request": request,
+                "check": check_data,
+            }
+
+        if check_only:
+            return {
+                "success": True,
+                "stage": "check_only",
+                "ticket": int(ticket),
+                "symbol": symbol,
+                "side": side,
+                "volume": float(volume),
+                "request": request,
+                "check": check_data,
+            }
+
+        result = mt5.order_send(
+            request
+        )
+
+        if result is None:
+            raise RuntimeError(
+                "order_send retornou None. "
+                f"last_error={mt5.last_error()}"
+            )
+
+        result_data = result._asdict()
+
+        # Mesma conversão necessária
+        # no resultado do order_send.
+        if (
+            "request" in result_data
+            and hasattr(
+                result_data["request"],
+                "_asdict",
+            )
+        ):
+            result_data["request"] = (
+                result_data["request"]
+                ._asdict()
+            )
+
+        success = result.retcode in (
+            mt5.TRADE_RETCODE_DONE,
+            mt5.TRADE_RETCODE_DONE_PARTIAL,
+            mt5.TRADE_RETCODE_PLACED,
+        )
+
+        return {
+            "success": success,
+            "stage": "send",
+            "ticket": int(ticket),
+            "symbol": symbol,
+            "side": side,
+            "volume": float(volume),
+            "request": request,
+            "check": check_data,
+            "result": result_data,
+        }
+    
     def find_symbols(self, text: str) -> list[dict]:
         self.ensure_connected()
 
