@@ -19,6 +19,21 @@ from trading.trading_service import (
     TradingService,
 )
 
+from trading.renko_30r_signal import (
+    Renko30RSignal,
+)
+
+from trading.order_guard import (
+    OrderGuard,
+)
+
+from trading.operation_manager import (
+    OperationManager,
+)
+
+from storage.trading_operation_repository import (
+    TradingOperationRepository,
+)
 
 
 from config.storage_config import (
@@ -68,6 +83,8 @@ from storage.renko_repository import (
 from storage.sqlite_manager import (
     SQLiteManager,
 )
+
+
 
 
 # ============================================================
@@ -1135,9 +1152,33 @@ async def lifespan(app: FastAPI):
     )
 
 
+    order_guard = OrderGuard(
+        signal_provider=
+            get_trading_signal
+    )
+
+
+    trading_operation_repository = (
+        TradingOperationRepository(
+            db_path=(
+                "data/trading/trading.db"
+            )
+        )
+    )
+
+    operation_manager = (
+        OperationManager(
+            repository=(
+                trading_operation_repository
+            )
+        )
+    )
+
     trading_service = TradingService(
         broker_router=broker_router,
         broker_id="xp",
+        order_guard=order_guard,
+        operation_manager=operation_manager,
     )
 
 
@@ -1837,4 +1878,126 @@ def renko_win_realtime_by_size(
                     brick_size
                 )
             ),
+    }
+
+
+
+# ============================================================
+# SINAL OPERACIONAL RENKO 30R
+#
+# Somente leitura.
+# Não envia ordens e não altera posições.
+# ============================================================
+
+def get_trading_signal(
+    market: str,
+) -> dict:
+
+    market = market.upper().strip()
+
+
+    if market not in (
+        "WIN",
+        "CFD",
+    ):
+        return {
+            "ready": False,
+            "direction": None,
+            "can_buy": False,
+            "can_sell": False,
+            "max_stop_price": None,
+            "reason":
+                "Mercado inválido.",
+        }
+
+
+    if not renko_initialized:
+
+        return {
+            "ready": False,
+            "direction": None,
+            "can_buy": False,
+            "can_sell": False,
+            "max_stop_price": None,
+            "reason":
+                "Renko não inicializado.",
+        }
+
+
+    if market == "WIN":
+
+        intraday_symbol = (
+            HISTORICAL_SYMBOL
+        )
+
+    else:
+
+        intraday_symbol = (
+            INTRADAY_SYMBOL
+        )
+
+
+    intraday_bricks = (
+        get_intraday_bricks(
+            brick_size=30,
+            symbol=intraday_symbol,
+        )
+    )
+
+
+    historical_bricks = (
+        historical_repository
+        .get_recent_closed_bricks(
+            HISTORICAL_SYMBOL,
+            30,
+            100,
+        )
+    )
+
+
+    combined_bricks = (
+        historical_bricks
+        +
+        intraday_bricks
+    )
+
+
+    signal = Renko30RSignal()
+
+
+    return signal.evaluate_bricks(
+        combined_bricks
+    )
+
+@app.get(
+    "/api/trading-signal/cfd"
+)
+def cfd_trading_signal():
+
+    result = get_trading_signal(
+        "CFD"
+    )
+
+    return {
+        "market": "CFD",
+        "initialized":
+            renko_initialized,
+        **result,
+    }
+
+
+@app.get(
+    "/api/trading-signal/win"
+)
+def win_trading_signal():
+
+    result = get_trading_signal(
+        "WIN"
+    )
+
+    return {
+        "market": "WIN",
+        "initialized":
+            renko_initialized,
+        **result,
     }

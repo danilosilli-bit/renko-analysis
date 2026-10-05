@@ -51,6 +51,14 @@ def send_win_order(
         broker_id="xp",
     )
 
+@router.get("/win/operations")
+def get_win_operations():
+
+    service = get_trading_service()
+
+    return service.get_open_operations(
+        expected_feed="WIN"
+    )
 
 @router.get("/win/positions")
 def get_win_positions():
@@ -68,9 +76,18 @@ def close_win_position(
     service = get_trading_service()
 
     return service.close_position(
-        ticket=request.ticket,
+        operation_id=request.operation_id,
         check_only=request.check_only,
-        broker_id="xp",
+        expected_feed="WIN",
+    )
+
+@router.get("/cfd/operations")
+def get_cfd_operations():
+
+    service = get_trading_service()
+
+    return service.get_open_operations(
+        expected_feed="CFD"
     )
 
 @router.get("/cfd/positions")
@@ -104,7 +121,7 @@ def close_cfd_position(
     service = get_trading_service()
 
     return service.close_position(
-        ticket=request.ticket,
+        operation_id=request.operation_id,
         check_only=request.check_only,
-        broker_id="activtrades",
+        expected_feed="CFD",
     )

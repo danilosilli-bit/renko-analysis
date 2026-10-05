@@ -395,12 +395,43 @@ class MT5RealtimeClient:
             mt5.TRADE_RETCODE_PLACED,
         )
 
+        position_ticket = None
+        position_ticket_error = None
+
+        if success:
+
+            deal_ticket = (
+                result_data.get("deal")
+            )
+
+            if deal_ticket:
+
+                try:
+
+                    position_ticket = (
+                        self
+                        .get_position_ticket_from_deal(
+                            deal_ticket
+                        )
+                    )
+
+                except Exception as exc:
+
+                    position_ticket_error = str(
+                        exc
+                    )
+
+
         return {
             "success": success,
             "stage": "send",
             "request": request,
             "check": check_data,
             "result": result_data,
+            "position_ticket":
+                position_ticket,
+            "position_ticket_error":
+                position_ticket_error,
         }
 
 
@@ -429,9 +460,58 @@ class MT5RealtimeClient:
             volume=volume,
         )
 
+    def get_position_ticket_from_deal(
+        self,
+        deal_ticket: int,
+    ) -> int | None:
+
+        deal_ticket = int(
+            deal_ticket
+        )
+
+        if deal_ticket <= 0:
+            return None
+
+
+        deals = mt5.history_deals_get(
+            ticket=deal_ticket
+        )
+
+
+        if deals is None:
+            raise RuntimeError(
+                "history_deals_get retornou "
+                "None para "
+                f"deal={deal_ticket}. "
+                f"last_error={mt5.last_error()}"
+            )
+
+
+        if not deals:
+            return None
+
+
+        for deal in deals:
+
+            if (
+                int(deal.ticket)
+                == deal_ticket
+            ):
+
+                position_id = int(
+                    deal.position_id
+                )
+
+                if position_id > 0:
+                    return position_id
+
+
+        return None    
+
     def close_position(
         self,
         ticket: int,
+        volume: float | None = None,
         deviation: int = 20,
         magic: int = 20260921,
         comment: str = "renko-analysis-close",
@@ -458,7 +538,37 @@ class MT5RealtimeClient:
         position = positions[0]
 
         symbol = position.symbol
-        volume = position.volume
+        position_volume = float(
+            position.volume
+        )
+
+        if volume is None:
+
+            close_volume = (
+                position_volume
+            )
+
+        else:
+
+            close_volume = float(
+                volume
+            )
+
+            if close_volume <= 0:
+                raise ValueError(
+                    "volume deve ser maior "
+                    "que zero."
+                )
+
+            if (
+                close_volume
+                > position_volume
+            ):
+                raise ValueError(
+                    "volume de fechamento "
+                    "não pode ser maior que "
+                    "o volume da posição."
+                )
 
         self.ensure_symbol(
             symbol
@@ -541,7 +651,7 @@ class MT5RealtimeClient:
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": symbol,
-            "volume": float(volume),
+            "volume": float(close_volume),
             "type": order_type,
             "position": int(ticket),
             "price": float(price),
@@ -585,7 +695,7 @@ class MT5RealtimeClient:
                 "ticket": int(ticket),
                 "symbol": symbol,
                 "side": side,
-                "volume": float(volume),
+                "volume": float(close_volume),
                 "request": request,
                 "check": check_data,
             }
@@ -597,7 +707,7 @@ class MT5RealtimeClient:
                 "ticket": int(ticket),
                 "symbol": symbol,
                 "side": side,
-                "volume": float(volume),
+                "volume": float(close_volume),
                 "request": request,
                 "check": check_data,
             }
@@ -640,7 +750,7 @@ class MT5RealtimeClient:
             "ticket": int(ticket),
             "symbol": symbol,
             "side": side,
-            "volume": float(volume),
+            "volume": float(close_volume),
             "request": request,
             "check": check_data,
             "result": result_data,

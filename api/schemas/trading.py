@@ -8,6 +8,6 @@ class MarketOrderRequest(BaseModel):
 
 
 class ClosePositionRequest(BaseModel):
-    ticket: int
+    operation_id: str
     check_only: bool = True
 

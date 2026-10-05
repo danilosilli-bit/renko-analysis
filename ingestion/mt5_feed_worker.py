@@ -272,6 +272,9 @@ def run_mt5_feed_worker(
                                     ticket=command.get(
                                         "ticket"
                                     ),
+                                    volume=command.get(
+                                        "volume"
+                                    ),
                                     check_only=command.get(
                                         "check_only",
                                         True,

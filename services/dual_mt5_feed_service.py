@@ -667,6 +667,7 @@ class DualMT5FeedService:
     def close_position(
         self,
         ticket: int,
+        volume: float | None = None,
         check_only: bool = True,
         feed: str = "WIN",
     ) -> str:
@@ -716,6 +717,13 @@ class DualMT5FeedService:
 
                 "ticket":
                     int(ticket),
+
+                "volume":
+                    (
+                        float(volume)
+                        if volume is not None
+                        else None
+                    ),
 
                 "check_only":
                     check_only,

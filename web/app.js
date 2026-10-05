@@ -198,8 +198,7 @@ async function loadRenkoCharts() {
     );
 }
 
-let currentWinPositionTicket = null;
-let currentCfdPositionTicket = null;
+
 
 async function loadTradingPosition() {
 
@@ -286,18 +285,6 @@ async function loadTradingPosition() {
 
         if (positions.length === 0) {
 
-            if (selectedMarket === "CFD") {
-
-                currentCfdPositionTicket =
-                    null;
-
-            } else {
-
-                currentWinPositionTicket =
-                    null;
-            }
-
-
             statusElement.textContent =
                 "FLAT";
 
@@ -334,18 +321,6 @@ async function loadTradingPosition() {
             positions[0];
 
 
-        if (selectedMarket === "CFD") {
-
-            currentCfdPositionTicket =
-                position.ticket;
-
-        } else {
-
-            currentWinPositionTicket =
-                position.ticket;
-        }
-
-
         statusElement.textContent =
             "ABERTA";
 
@@ -373,7 +348,7 @@ async function loadTradingPosition() {
         }
 
         if (closeButton) {
-            closeButton.disabled = false;
+            closeButton.disabled = true;
         }
 
     } catch (error) {
@@ -384,6 +359,502 @@ async function loadTradingPosition() {
         );
     }
 }
+
+async function loadTradingSignal() {
+
+    try {
+
+        const marketAtRequest =
+            window.selectedMarket;
+
+        let data;
+
+        if (marketAtRequest === "CFD") {
+
+            data =
+                await fetchCfdTradingSignal();
+
+        } else if (marketAtRequest === "WIN") {
+
+            data =
+                await fetchWinTradingSignal();
+
+        } else {
+
+            return;
+        }
+
+
+        /*
+            Se o mercado mudou enquanto
+            aguardávamos a resposta,
+            ignoramos a resposta antiga.
+        */
+        if (
+            marketAtRequest !==
+            window.selectedMarket
+        ) {
+            return;
+        }
+
+
+        if (!data) {
+            return;
+        }
+
+
+        const directionElement =
+            document.getElementById(
+                "trading-signal-direction"
+            );
+
+        const buyElement =
+            document.getElementById(
+                "trading-signal-buy"
+            );
+
+        const sellElement =
+            document.getElementById(
+                "trading-signal-sell"
+            );
+
+        const maxStopElement =
+            document.getElementById(
+                "trading-signal-max-stop"
+            );
+
+
+        if (
+            !directionElement ||
+            !buyElement ||
+            !sellElement ||
+            !maxStopElement
+        ) {
+            return;
+        }
+
+
+        if (!data.ready) {
+
+            directionElement.textContent = "-";
+            buyElement.textContent = "-";
+            sellElement.textContent = "-";
+            maxStopElement.textContent = "-";
+
+            return;
+        }
+
+
+        directionElement.textContent =
+            data.direction === "BUY"
+                ? "COMPRA"
+                : "VENDA";
+
+        buyElement.textContent =
+            data.can_buy === true
+                ? "PERMITIDA"
+                : "BLOQUEADA";
+
+        sellElement.textContent =
+            data.can_sell === true
+                ? "PERMITIDA"
+                : "BLOQUEADA";
+
+        maxStopElement.textContent =
+            data.max_stop_price ?? "-";
+
+
+    } catch (error) {
+
+        console.error(
+            "Erro sinal operacional 30R:",
+            error
+        );
+    }
+}
+
+async function loadTradingOperations() {
+
+    try {
+
+        const marketAtRequest =
+            window.selectedMarket;
+
+        let data;
+
+        if (marketAtRequest === "CFD") {
+
+            data =
+                await fetchCfdOperations();
+
+        } else if (
+            marketAtRequest === "WIN"
+        ) {
+
+            data =
+                await fetchWinOperations();
+
+        } else {
+
+            return;
+        }
+
+
+        if (
+            marketAtRequest !==
+            window.selectedMarket
+        ) {
+            return;
+        }
+
+
+        if (
+            !data ||
+            data.status !== "OK"
+        ) {
+            return;
+        }
+
+
+        const operations =
+            data.operations || [];
+
+        const listElement =
+            document.getElementById(
+                "trading-operations-list"
+            );
+
+        if (!listElement) {
+            return;
+        }
+
+
+        listElement.innerHTML = "";
+
+
+        if (operations.length === 0) {
+
+            const emptyRow =
+                document.createElement(
+                    "div"
+                );
+
+            emptyRow.className =
+                "position-row";
+
+            const emptyLabel =
+                document.createElement(
+                    "span"
+                );
+
+            emptyLabel.className =
+                "position-label";
+
+            emptyLabel.textContent =
+                "Nenhuma operação aberta";
+
+            emptyRow.appendChild(
+                emptyLabel
+            );
+
+            listElement.appendChild(
+                emptyRow
+            );
+
+            return;
+        }
+
+
+        for (
+            const operation
+            of operations
+        ) {
+
+            const operationBlock =
+                document.createElement(
+                    "div"
+                );
+
+
+            const sideRow =
+                document.createElement(
+                    "div"
+                );
+
+            sideRow.className =
+                "position-row";
+
+            const sideLabel =
+                document.createElement(
+                    "span"
+                );
+
+            sideLabel.className =
+                "position-label";
+
+            sideLabel.textContent =
+                "Operação";
+
+            const sideValue =
+                document.createElement(
+                    "span"
+                );
+
+            sideValue.className =
+                "position-value";
+
+            sideValue.textContent =
+                (
+                    operation.side
+                    + " | "
+                    + operation.volume
+                );
+
+            sideRow.appendChild(
+                sideLabel
+            );
+
+            sideRow.appendChild(
+                sideValue
+            );
+
+
+            const priceRow =
+                document.createElement(
+                    "div"
+                );
+
+            priceRow.className =
+                "position-row";
+
+            const priceLabel =
+                document.createElement(
+                    "span"
+                );
+
+            priceLabel.className =
+                "position-label";
+
+            priceLabel.textContent =
+                "Entrada";
+
+            const priceValue =
+                document.createElement(
+                    "span"
+                );
+
+            priceValue.className =
+                "position-value";
+
+            priceValue.textContent =
+                (
+                    operation.entry_price
+                    ?? "-"
+                );
+
+            priceRow.appendChild(
+                priceLabel
+            );
+
+            priceRow.appendChild(
+                priceValue
+            );
+
+
+            const stopRow =
+                document.createElement(
+                    "div"
+                );
+
+            stopRow.className =
+                "position-row";
+
+            const stopLabel =
+                document.createElement(
+                    "span"
+                );
+
+            stopLabel.className =
+                "position-label";
+
+            stopLabel.textContent =
+                "Stop máx.";
+
+            const stopValue =
+                document.createElement(
+                    "span"
+                );
+
+            stopValue.className =
+                "position-value";
+
+            stopValue.textContent =
+                operation.max_stop_price;
+
+            stopRow.appendChild(
+                stopLabel
+            );
+
+            stopRow.appendChild(
+                stopValue
+            );
+
+
+            const closeRow =
+                document.createElement(
+                    "div"
+                );
+
+            closeRow.className =
+                "position-row";
+
+
+            const closeButton =
+                document.createElement(
+                    "button"
+                );
+
+            closeButton.className =
+                "trade-button close-button";
+
+            closeButton.textContent =
+                "FECHAR ESTA OPERAÇÃO";
+
+
+            closeButton.addEventListener(
+                "click",
+                async () => {
+
+                    const confirmationMessage =
+                        "Confirmar fechamento?\n\n"
+                        + "Mercado: "
+                        + operation.feed
+                        + "\n"
+                        + "Lado: "
+                        + operation.side
+                        + "\n"
+                        + "Volume: "
+                        + operation.volume
+                        + "\n"
+                        + "Operation ID: "
+                        + operation.operation_id;
+
+
+                    const confirmed =
+                        window.confirm(
+                            confirmationMessage
+                        );
+
+
+                    if (!confirmed) {
+                        return;
+                    }
+
+
+                    closeButton.disabled =
+                        true;
+
+
+                    try {
+
+                        let result;
+
+                        if (
+                            operation.feed
+                            === "CFD"
+                        ) {
+
+                            result =
+                                await closeCfdPosition(
+                                    operation.operation_id,
+                                    false
+                                );
+
+                        } else if (
+                            operation.feed
+                            === "WIN"
+                        ) {
+
+                            result =
+                                await closeWinPosition(
+                                    operation.operation_id,
+                                    false
+                                );
+
+                        } else {
+
+                            throw new Error(
+                                "Feed inválido "
+                                + "na operação."
+                            );
+                        }
+
+
+                        console.log(
+                            "CLOSE OPERATION:",
+                            result
+                        );
+
+
+                        await Promise.all([
+                            loadTradingOperations(),
+                            loadTradingPosition()
+                        ]);
+
+
+                    } catch (error) {
+
+                        console.error(
+                            "Erro ao fechar operação:",
+                            error
+                        );
+
+                    } finally {
+
+                        closeButton.disabled =
+                            false;
+                    }
+                }
+            );
+
+
+            closeRow.appendChild(
+                closeButton
+            );
+
+
+            operationBlock.appendChild(
+                sideRow
+            );
+
+            operationBlock.appendChild(
+                priceRow
+            );
+
+            operationBlock.appendChild(
+                stopRow
+            );
+
+            operationBlock.appendChild(
+                closeRow
+            );
+
+
+            listElement.appendChild(
+                operationBlock
+            );
+        }
+
+
+    } catch (error) {
+
+        console.error(
+            "Erro ao carregar operações:",
+            error
+        );
+    }
+}
+
 /*
     ATUALIZAÇÃO GERAL DO DASHBOARD
 */
@@ -398,7 +869,11 @@ async function updateDashboard() {
 
         loadRenkoPanels(),
 
-        loadTradingPosition()
+        loadTradingPosition(),
+
+        loadTradingSignal(),
+
+        loadTradingOperations()
 
     ]);
 }
@@ -706,106 +1181,6 @@ async function checkWinSellOrder() {
     }
 }
 
-async function checkWinClosePosition() {
-
-    const selectedMarket =
-        window.selectedMarket;
-
-    let positionTicket = null;
-
-    if (selectedMarket === "CFD") {
-
-        positionTicket =
-            currentCfdPositionTicket;
-
-    } else if (selectedMarket === "WIN") {
-
-        positionTicket =
-            currentWinPositionTicket;
-
-    } else {
-
-        console.error(
-            "Mercado não selecionado. "
-            + "Fechamento bloqueado."
-        );
-
-        return;
-    }
-
-
-    if (!positionTicket) {
-
-        console.log(
-            "Nenhuma posição "
-            + selectedMarket
-            + " para fechar."
-        );
-
-        return;
-    }
-
-
-    const closeButton =
-        document.getElementById(
-            "win-close-button"
-        );
-
-    if (!closeButton) {
-        return;
-    }
-
-
-    closeButton.disabled = true;
-
-
-    try {
-
-        let result;
-
-        if (selectedMarket === "CFD") {
-
-            result =
-                await closeCfdPosition(
-                    positionTicket,
-                    false
-                );
-
-            console.log(
-                "CFD CLOSE:",
-                result
-            );
-
-        } else {
-
-            result =
-                await closeWinPosition(
-                    positionTicket,
-                    false
-                );
-
-            console.log(
-                "WIN CLOSE:",
-                result
-            );
-        }
-
-
-        await loadTradingPosition();
-
-
-    } catch (error) {
-
-        console.error(
-            "Erro CLOSE:",
-            error
-        );
-
-    } finally {
-
-        closeButton.disabled = false;
-    }
-}
 
 /*
     INICIALIZAÇÃO
@@ -853,13 +1228,7 @@ const winCloseButton =
     );
 
 if (winCloseButton) {
-
-    winCloseButton.disabled = false;
-
-    winCloseButton.addEventListener(
-        "click",
-        checkWinClosePosition
-    );
+    winCloseButton.disabled = true;
 }
 
 setInterval(

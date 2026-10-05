@@ -74,6 +74,27 @@ async function fetchRenkoRealtime(
     );
 }
 
+async function fetchWinOperations() {
+
+    return apiGet(
+        "/api/trading/win/operations",
+        {
+            cache: "no-store"
+        }
+    );
+}
+
+
+async function fetchCfdOperations() {
+
+    return apiGet(
+        "/api/trading/cfd/operations",
+        {
+            cache: "no-store"
+        }
+    );
+}
+
 async function fetchWinPositions() {
     return apiGet(
         "/api/trading/win/positions",
@@ -123,29 +144,36 @@ async function sendWinOrder(
 }
 
 async function closeWinPosition(
-    ticket,
+    operationId,
     checkOnly = true
 ) {
+
     const response = await fetch(
         "/api/trading/win/close-position",
         {
             method: "POST",
-
             headers: {
                 "Content-Type":
                     "application/json"
             },
-
             body: JSON.stringify({
-                ticket: ticket,
-                check_only: checkOnly
+                operation_id:
+                    operationId,
+                check_only:
+                    checkOnly
             })
         }
     );
 
+
     if (!response.ok) {
-        return null;
+
+        throw new Error(
+            "Erro ao fechar "
+            + "operação WIN."
+        );
     }
+
 
     return await response.json();
 }
@@ -181,29 +209,55 @@ async function sendCfdOrder(
 }
 
 async function closeCfdPosition(
-    ticket,
+    operationId,
     checkOnly = true
 ) {
+
     const response = await fetch(
         "/api/trading/cfd/close-position",
         {
             method: "POST",
-
             headers: {
                 "Content-Type":
                     "application/json"
             },
-
             body: JSON.stringify({
-                ticket: ticket,
-                check_only: checkOnly
+                operation_id:
+                    operationId,
+                check_only:
+                    checkOnly
             })
         }
     );
 
+
     if (!response.ok) {
-        return null;
+
+        throw new Error(
+            "Erro ao fechar "
+            + "operação CFD."
+        );
     }
 
+
     return await response.json();
+}
+
+async function fetchWinTradingSignal() {
+    return apiGet(
+        "/api/trading-signal/win",
+        {
+            cache: "no-store"
+        }
+    );
+}
+
+
+async function fetchCfdTradingSignal() {
+    return apiGet(
+        "/api/trading-signal/cfd",
+        {
+            cache: "no-store"
+        }
+    );
 }
