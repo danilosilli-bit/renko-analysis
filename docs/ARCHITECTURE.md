@@ -807,3 +807,504 @@ A future architecture review may consider moving orchestration responsibilities 
 Such a change would concern **where the orchestration is implemented**, not **how the bootstrap, bifurcation and realtime behavior works**.
 
 No refactoring decision has been made at this stage.
+
+## 10. Trading Architecture
+
+The trading subsystem currently implements a semi-automatic execution model.
+
+Trade entry is initiated manually by the user through the application.
+
+Renko signals do not automatically create market orders.
+
+Instead, the current 30R Renko signal acts as an authorization mechanism that determines whether a manually requested BUY or SELL operation is allowed.
+
+The current architectural refactoring must preserve this behavior.
+
+---
+
+### 10.1 Semi-Automatic Trading Model
+
+The current trading model is:
+
+```text
+User decides to enter
+        |
+        v
+Manual BUY / SELL request
+        |
+        v
+TradingService
+        |
+        v
+OrderGuard
+        |
+        v
+30R Renko authorization
+        |
+   +----+----+
+   |         |
+blocked    allowed
+             |
+             v
+      TradingOperation
+             |
+             v
+        MT5 execution
+```
+
+The system therefore separates:
+
+```text
+ENTRY DECISION
+    made manually by the user
+
+        from
+
+ENTRY AUTHORIZATION
+    determined by the platform
+    using the current trading rules
+```
+
+A closed Renko brick does not automatically create an order.
+
+---
+
+### 10.2 30R Trading Signal
+
+The current operational signal is based on the latest closed 30R Renko brick.
+
+Conceptually:
+
+```text
+Latest 30R brick UP
+        |
+        +--> BUY may be authorized
+        |
+        +--> SELL is blocked
+
+
+Latest 30R brick DOWN
+        |
+        +--> SELL may be authorized
+        |
+        +--> BUY is blocked
+```
+
+The signal also determines the maximum stop boundary associated with the entry.
+
+The current implementation uses the latest 30R brick when calculating this boundary.
+
+The 30R signal is an authorization mechanism.
+
+It is not an automatic order generator.
+
+---
+
+### 10.3 OrderGuard
+
+`OrderGuard` protects new entries.
+
+Before an entry order is sent to the broker, the requested direction must be compatible with the current operational signal.
+
+The guard follows a fail-closed principle.
+
+If the platform cannot safely determine that the requested entry is allowed, the entry must not proceed.
+
+Examples include situations where:
+
+* no valid trading signal is available;
+* the Renko state is not ready;
+* the requested direction conflicts with the signal;
+* the signal evaluation fails;
+* the required guard is unavailable.
+
+The purpose of the guard is to prevent execution when the platform cannot positively authorize the operation.
+
+---
+
+### 10.4 Broker Routing
+
+`BrokerRouter` separates the logical trading request from the broker/feed used to execute it.
+
+The current system supports distinct trading destinations associated with the WIN and CFD runtimes.
+
+Conceptually:
+
+```text
+Trading request
+      |
+      v
+BrokerRouter
+   +--+--+
+   |     |
+   v     v
+  XP   ActivTrades
+  |       |
+ WIN     CFD
+```
+
+This separation must be preserved because WIN and CFD represent independent runtime and execution paths.
+
+---
+
+### 10.5 TradingOperation
+
+`TradingOperation` represents the platform's logical trading operation.
+
+The logical operation is distinct from the MT5 order and position identifiers.
+
+Conceptually:
+
+```text
+TradingOperation
+      |
+      +--> operation_id
+      |
+      +--> broker/feed
+      |
+      +--> symbol
+      |
+      +--> side
+      |
+      +--> volume
+      |
+      +--> entry information
+      |
+      +--> max_stop_price
+      |
+      +--> current_stop_price
+      |
+      +--> mt5_order_ticket
+      |
+      +--> mt5_position_ticket
+      |
+      +--> operation status
+```
+
+This allows the platform to maintain its own operation identity independently from broker-specific identifiers.
+
+The logical operation should remain the central representation of a trade managed by the platform.
+
+---
+
+### 10.6 Operation Lifecycle
+
+The current operation lifecycle includes states such as:
+
+```text
+             create
+               |
+               v
+            PENDING
+           /       \
+          /         \
+         v           v
+      FAILED      RECONCILE
+         |
+         | successful execution
+         v
+        OPEN
+         |
+         | confirmed close
+         v
+       CLOSED
+```
+
+The exact transition depends on the result of broker execution and reconciliation.
+
+`RECONCILE` is important for situations where the platform cannot safely determine the final broker state.
+
+For example, a timeout or ambiguous MT5 result must not automatically be interpreted as either successful execution or definite failure.
+
+The platform should preserve the uncertainty until reconciliation can establish the actual broker state.
+
+---
+
+### 10.7 OperationManager
+
+`OperationManager` manages the lifecycle of logical trading operations.
+
+Its responsibilities currently include operations such as:
+
+* creating logical operations;
+* maintaining active operations;
+* updating operation state;
+* associating broker identifiers with logical operations;
+* updating the current stop representation;
+* persisting operation changes through the trading repository.
+
+The manager provides a boundary between the trading workflow and persistence of the logical operation state.
+
+---
+
+### 10.8 Trading Persistence
+
+Trading operations are persisted separately from market tick and Renko persistence.
+
+The trading persistence layer stores the logical state required to reconstruct and manage operations.
+
+An important current invariant is that:
+
+```text
+max_stop_price
+```
+
+is established when the operation is created and is not subsequently modified by normal operation updates.
+
+By contrast:
+
+```text
+current_stop_price
+```
+
+represents the stop value that may evolve during the lifetime of the operation.
+
+This distinction is intentional and must be preserved.
+
+---
+
+### 10.9 Maximum Stop and Current Stop
+
+The current logical model contains two distinct stop concepts.
+
+#### Maximum Stop
+
+`max_stop_price` represents the maximum allowed risk boundary established when the operation is created.
+
+It is immutable during the normal lifetime of the operation.
+
+Conceptually:
+
+```text
+ENTRY
+  |
+  v
+max_stop_price established
+  |
+  v
+FIXED FOR THE OPERATION
+```
+
+The maximum stop acts as a risk boundary and must not be moved in a direction that increases the allowed risk.
+
+#### Current Stop
+
+`current_stop_price` represents the operational stop value managed by the platform.
+
+It may evolve during the lifetime of the operation, subject to the maximum-stop boundary and the operation's stop movement rules.
+
+Conceptually:
+
+```text
+BUY operation
+
+max_stop_price
+      |
+      | permitted range
+      v
+current_stop_price
+      |
+      | may move upward
+      v
+future protective levels
+```
+
+For SELL operations, the direction is reversed accordingly.
+
+The current logical rules prevent the current stop from being moved in a direction that increases risk beyond the permitted boundary.
+
+---
+
+### 10.10 Stop Execution Status
+
+The logical stop model must not be confused with broker-side stop execution.
+
+At the current stage of the project:
+
+```text
+max_stop_price
+      |
+      +--> represented by the platform
+
+current_stop_price
+      |
+      +--> represented and controlled logically
+           by the platform
+```
+
+The complete mechanism that sends and manages these operational stop orders in MT5 has **not yet been implemented**.
+
+Therefore:
+
+```text
+logical stop state
+        !=
+complete MT5 stop-order management
+```
+
+Architectural refactoring must not silently introduce broker-side stop behavior.
+
+---
+
+### 10.11 Future MT5 Safety Stop
+
+A separate broker-side safety stop has been identified as a future requirement.
+
+The intention is that a protective stop may eventually be placed directly in MT5 immediately after entry so that some broker-side protection exists even if the application becomes unavailable.
+
+Conceptually, the future model may contain three related but distinct concepts:
+
+```text
+TradingOperation
+      |
+      +--> max_stop_price
+      |      immutable logical risk boundary
+      |
+      +--> current_stop_price
+      |      platform-managed operational stop
+      |
+      +--> MT5 safety stop
+             broker-side protection
+```
+
+The behavior, calculation and lifecycle of the MT5 safety stop have not yet been defined.
+
+It must therefore not be implemented as part of the current architectural reorganization.
+
+---
+
+### 10.12 Future Position Management
+
+Additional position-management capabilities are planned but are not part of the current implementation.
+
+They include concepts such as:
+
+* moving the operational stop;
+* break-even;
+* partial exits;
+* future stop-management rules;
+* sending and modifying stop orders in MT5.
+
+These are future functional developments.
+
+The current architecture work should make these capabilities easier to implement later, but must not implement or define their trading rules prematurely.
+
+---
+
+### 10.13 Current Trading Responsibilities
+
+The current trading subsystem is divided approximately as follows:
+
+```text
+renko_30r_signal.py
+        |
+        +--> operational signal calculation
+        +--> entry direction authorization data
+        +--> maximum stop boundary information
+
+
+order_guard.py
+        |
+        +--> entry protection
+        +--> signal validation
+        +--> allow / block decision
+
+
+trading_operation.py
+        |
+        +--> logical operation model
+        +--> operation invariants
+        +--> stop invariants
+
+
+operation_manager.py
+        |
+        +--> operation lifecycle
+        +--> active operation management
+        +--> logical state updates
+        +--> persistence coordination
+
+
+broker_router.py
+        |
+        +--> broker/feed routing
+
+
+trading_service.py
+        |
+        +--> trading workflow orchestration
+        +--> validation
+        +--> guard coordination
+        +--> logical operation creation
+        +--> broker communication
+        +--> broker result interpretation
+        +--> operation state transitions
+
+
+trading_operation_repository.py
+        |
+        +--> persistent storage of logical operations
+```
+
+This separation already provides useful architectural boundaries.
+
+---
+
+### 10.14 Current Architecture Observation
+
+The primary architectural concern in the trading subsystem is not the existing trading behavior.
+
+The main concern is the potential growth of `TradingService`.
+
+`TradingService` currently coordinates several parts of the execution workflow.
+
+This is manageable with the current feature set, but future functionality such as:
+
+```text
+MT5 safety stop
+operational stop updates
+break-even
+partial exits
+position reconciliation
+additional risk rules
+```
+
+could significantly increase its responsibilities.
+
+A future refactoring may therefore consider separating some orchestration responsibilities into dedicated components.
+
+No such refactoring decision has been made yet.
+
+The architecture should first be reorganized without changing trading behavior.
+
+---
+
+### 10.15 Protected Trading Invariants
+
+The following behaviors must be preserved during the current architectural reorganization:
+
+1. The system remains semi-automatic.
+
+2. Entry orders are initiated manually by the user.
+
+3. Closing a Renko brick does not automatically create an entry order.
+
+4. The 30R Renko signal authorizes or blocks a manually requested entry.
+
+5. Entry validation follows a fail-closed approach.
+
+6. WIN and CFD execution paths remain independently routed to their corresponding brokers/feeds.
+
+7. The platform maintains a logical `TradingOperation` identity independently from MT5 tickets.
+
+8. Ambiguous broker execution states may enter `RECONCILE` rather than being incorrectly assumed successful or failed.
+
+9. `max_stop_price` is established for the operation and remains immutable.
+
+10. `current_stop_price` may evolve only according to the operation's risk constraints.
+
+11. Existing logical stop fields must not be interpreted as complete MT5 stop-order management.
+
+12. MT5 safety stop, break-even, automatic stop movement and partial exits are future functionality and must not be implemented as side effects of the current refactoring.
+
+13. The objective of the current refactoring is structural clarity and maintainability, not new trading behavior.
