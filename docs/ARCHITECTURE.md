@@ -496,3 +496,314 @@ However, `RenkoEngine` participates in multiple processing flows, including hist
 For this reason, this dependency must only be reconsidered after those flows have also been documented and understood.
 
 No refactoring decision has been made.
+
+## 9. Bootstrap, Runtime Bifurcation and Realtime Flow
+
+The application uses a bootstrap process to reconstruct the current intraday Renko state before starting independent WIN and CFD realtime runtimes.
+
+This behavior is intentional and is a **functional requirement of the system**.
+
+Architectural refactoring must preserve this processing sequence unless a behavioral change is explicitly requested.
+
+---
+
+### 9.1 Bootstrap Starting State
+
+The bootstrap process does not start the Renko engines from an empty state.
+
+For each configured Renko size, the application restores the previously persisted historical state and the last closed Renko brick.
+
+The currently relevant Renko sizes are:
+
+* 10R
+* 30R
+* 45R
+
+Conceptually:
+
+```text
+Historical Renko state
+        +
+Last closed Renko brick
+        |
+        v
+Bootstrap RenkoService
+```
+
+This establishes the starting point for processing the current trading day.
+
+---
+
+### 9.2 Current-Day Bootstrap
+
+After restoring the previous Renko state, the application obtains the current day's WIN ticks from the XP MetaTrader 5 source.
+
+The bootstrap flow is:
+
+```text
+Historical Renko state
+        |
+        v
+Bootstrap RenkoService
+        |
+        v
+Current-day XP / WIN ticks
+        |
+        v
+IntradayTick conversion
+        |
+        v
+Renko processing
+        |
+        v
+Updated 10R / 30R / 45R state
+```
+
+The current-day ticks are replayed in chronological order to reconstruct the Renko state up to the end of the bootstrap data.
+
+During this replay, persistence is intentionally deferred where appropriate so the bootstrap can reconstruct the runtime state without treating the replay as ordinary realtime processing.
+
+---
+
+### 9.3 Runtime Snapshot
+
+After the current-day bootstrap is complete, the application creates a runtime snapshot.
+
+The snapshot contains the information required to continue each Renko size from the same reconstructed point, including:
+
+* Renko state;
+* last closed brick.
+
+The snapshot creates independent copies of the runtime state.
+
+Conceptually:
+
+```text
+Bootstrap state
+  10R / 30R / 45R
+        |
+        v
+Runtime Snapshot
+```
+
+This snapshot is the common starting point for the WIN and CFD realtime runtimes.
+
+---
+
+### 9.4 WIN and CFD Bifurcation
+
+After the snapshot is created, the application bifurcates the processing into two independent Renko runtimes.
+
+```text
+                  Bootstrap
+                     |
+                  Snapshot
+                     |
+              +------+------+
+              |             |
+              v             v
+          WIN Runtime    CFD Runtime
+```
+
+Both runtimes begin from the same reconstructed market history.
+
+After bifurcation, however, their Renko states are independent.
+
+Changes to one runtime must not mutate the state of the other runtime.
+
+This independence is an intentional requirement of the system.
+
+---
+
+### 9.5 WIN Realtime Runtime
+
+After bifurcation, the WIN runtime continues using realtime market data from the XP MetaTrader 5 source.
+
+Conceptually:
+
+```text
+Bootstrap Snapshot
+        |
+        v
+WIN RenkoService
+        |
+        v
+XP / WIN realtime ticks
+        |
+        v
+WIN IntradayMarketPipeline
+        |
+        +----> Intraday tick persistence
+        |
+        v
+WIN Renko processing
+```
+
+The WIN runtime continues independently from the common bootstrap snapshot.
+
+---
+
+### 9.6 CFD Realtime Runtime
+
+The CFD runtime also starts from the common bootstrap snapshot.
+
+After bifurcation, however, it continues using realtime market data from the ActivTrades MetaTrader 5 source.
+
+Conceptually:
+
+```text
+Bootstrap Snapshot
+        |
+        v
+CFD RenkoService
+        |
+        v
+ActivTrades / CFD realtime ticks
+        |
+        v
+CFD IntradayMarketPipeline
+        |
+        +----> Intraday tick persistence
+        |
+        v
+CFD Renko processing
+```
+
+The CFD runtime therefore shares the reconstructed past with the WIN runtime but has an independent realtime future.
+
+---
+
+### 9.7 Source Handoff
+
+The transition between bootstrap data and realtime data is explicitly represented by the source handoff mechanism.
+
+`SourceHandoffService` identifies the first realtime tick following the bootstrap and marks the source transition.
+
+This is especially relevant to the CFD runtime because its historical/current-day bootstrap originates from the WIN/futures data flow while its realtime continuation uses the CFD source.
+
+Conceptually:
+
+```text
+Bootstrap source
+      |
+      v
+Last bootstrap tick
+      |
+      | source handoff
+      v
+First realtime tick
+      |
+      v
+Realtime source
+```
+
+The source transition is intentional and must remain identifiable by the runtime.
+
+---
+
+### 9.8 Dual Realtime MT5 Feed
+
+Realtime data is currently obtained through `DualMT5FeedService`.
+
+The service manages independent MT5 feed workers for the WIN and CFD sources.
+
+Conceptually:
+
+```text
+                 DualMT5FeedService
+                         |
+              +----------+----------+
+              |                     |
+              v                     v
+        XP / WIN worker      ActivTrades / CFD worker
+              |                     |
+              +----------+----------+
+                         |
+                         v
+                       Queue
+                         |
+                         v
+                  Runtime consumer
+                    +----+----+
+                    |         |
+                    v         v
+                  WIN        CFD
+                callback   callback
+```
+
+The feed workers are responsible for obtaining realtime ticks.
+
+Renko processing remains outside the feed workers.
+
+---
+
+### 9.9 Realtime Market Pipelines
+
+After routing to the correct runtime, each realtime tick passes through its corresponding `IntradayMarketPipeline`.
+
+The pipeline is responsible for:
+
+1. converting the realtime tick into the intraday representation;
+2. persisting the intraday tick;
+3. forwarding the tick to the corresponding `RenkoService`.
+
+The two runtime paths remain independent:
+
+```text
+XP realtime
+    |
+    v
+WIN pipeline
+    |
+    v
+WIN RenkoService
+
+
+ActivTrades realtime
+    |
+    v
+CFD pipeline
+    |
+    v
+CFD RenkoService
+```
+
+---
+
+### 9.10 Protected Runtime Invariants
+
+The following behavior is considered a functional requirement and must be preserved during architectural refactoring:
+
+1. Renko bootstrap starts from the previously persisted historical state rather than from an empty state.
+
+2. Current-day XP/WIN ticks are replayed before runtime bifurcation.
+
+3. The bootstrap produces a common reconstructed Renko state for 10R, 30R and 45R.
+
+4. WIN and CFD runtimes are initialized from the same runtime snapshot.
+
+5. After bifurcation, WIN and CFD Renko states are independent.
+
+6. WIN realtime processing continues from the XP/WIN source.
+
+7. CFD realtime processing continues from the ActivTrades/CFD source.
+
+8. The transition between bootstrap and realtime sources remains explicitly identifiable.
+
+9. Architectural refactoring must not change these behaviors unless the behavioral change is explicitly designed, reviewed and tested.
+
+---
+
+### 9.11 Current Architecture Observation
+
+The bootstrap, bifurcation and realtime processing model matches the intended system behavior.
+
+No redesign of this processing logic is currently planned.
+
+The main architectural concern is that a significant portion of the initialization and orchestration of this flow currently resides in `api/app.py`.
+
+A future architecture review may consider moving orchestration responsibilities into dedicated application services or runtime components.
+
+Such a change would concern **where the orchestration is implemented**, not **how the bootstrap, bifurcation and realtime behavior works**.
+
+No refactoring decision has been made at this stage.
