@@ -39,12 +39,13 @@ class ApplicationRuntime:
         """
         Start the market/Renko runtime.
 
-        Responsibilities will be migrated incrementally from
+        Responsibilities are being migrated incrementally from
         api/app.py.
+
+        The runtime is not considered fully started until the complete
+        startup lifecycle has been migrated.
         """
-        raise NotImplementedError(
-            "ApplicationRuntime.start() is not implemented yet."
-        )
+        self._reset_intraday_storage()
 
     def stop(self) -> None:
         """

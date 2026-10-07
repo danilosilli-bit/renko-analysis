@@ -12,3 +12,16 @@ def test_reset_intraday_storage_delegates_to_storage():
         runtime._reset_intraday_storage()
 
     reset_mock.assert_called_once_with()
+
+
+def test_start_resets_intraday_storage_without_marking_runtime_started():
+    runtime = ApplicationRuntime()
+
+    with patch.object(
+        runtime,
+        "_reset_intraday_storage",
+    ) as reset_mock:
+        runtime.start()
+
+    reset_mock.assert_called_once_with()
+    assert runtime.started is False
