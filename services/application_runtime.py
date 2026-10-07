@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from config.storage_config import HISTORICAL_RENKO_DB
+from storage.renko_repository import RenkoRepository
+from storage.sqlite_manager import SQLiteManager
 from storage.intraday_storage import reset_intraday_storage
-
 
 class ApplicationRuntime:
     """
@@ -25,6 +27,7 @@ class ApplicationRuntime:
 
     def __init__(self) -> None:
         self.started = False
+        self.historical_repository = None
 
     def _reset_intraday_storage(self) -> None:
         """
@@ -34,6 +37,15 @@ class ApplicationRuntime:
         of this reset.
         """
         reset_intraday_storage()
+
+    def _open_historical_repository(self) -> None:
+        historical_db = SQLiteManager(
+            str(HISTORICAL_RENKO_DB)
+        )
+
+        self.historical_repository = RenkoRepository(
+            historical_db
+        )
 
     def start(self) -> None:
         """
@@ -46,6 +58,7 @@ class ApplicationRuntime:
         startup lifecycle has been migrated.
         """
         self._reset_intraday_storage()
+        self._open_historical_repository()
 
     def stop(self) -> None:
         """
