@@ -1308,3 +1308,407 @@ The following behaviors must be preserved during the current architectural reorg
 12. MT5 safety stop, break-even, automatic stop movement and partial exits are future functionality and must not be implemented as side effects of the current refactoring.
 
 13. The objective of the current refactoring is structural clarity and maintainability, not new trading behavior.
+
+## 11. Persistence Architecture
+
+The application currently maintains separate persistence areas for different data lifecycles.
+
+These persistence areas must not be interpreted as redundant copies of the same database.
+
+They serve different operational purposes and have different lifecycle and safety requirements.
+
+The current architecture can be divided conceptually into:
+
+```text
+Historical Staging
+        |
+        | manual validation and promotion
+        v
+Historical Approved
+        |
+        | bootstrap
+        v
+Intraday Runtime
+
+Trading Persistence
+        |
+        +--> independent persistent lifecycle
+```
+
+The current architectural refactoring must preserve these lifecycle boundaries.
+
+---
+
+### 11.1 Historical Staging
+
+Historical market data is initially collected and processed through the manual historical workflow implemented by `main.py`.
+
+The staging databases are currently:
+
+```text
+data/ticks.db
+data/renko.db
+```
+
+Conceptually:
+
+```text
+MT5 historical data
+        |
+        v
+main.py
+        |
+        +--> collect and normalize ticks
+        |
+        v
+data/ticks.db
+        |
+        +--> historical Renko processing
+        |
+        v
+data/renko.db
+```
+
+These databases represent a historical staging area.
+
+They are used to produce and inspect historical data before that data becomes part of the historical dataset used by the realtime application.
+
+They must not be considered obsolete solely because equivalent database names also exist under `data/historical/`.
+
+---
+
+### 11.2 Historical Validation and Promotion
+
+Promotion from historical staging to the approved historical dataset is currently a deliberate manual process.
+
+Conceptually:
+
+```text
+data/ticks.db
+data/renko.db
+        |
+        v
+manual inspection / validation
+        |
+        v
+manual copy
+        |
+        v
+data/historical/ticks.db
+data/historical/renko.db
+```
+
+This manual step acts as a validation barrier.
+
+Its purpose is to prevent newly collected or newly processed historical data from immediately replacing the historical dataset used by the runtime before the data has been checked.
+
+This behavior is intentional.
+
+The current architectural refactoring must not automatically make `main.py` write directly to the approved historical databases.
+
+Any future automation of historical promotion would be a separate functional change requiring explicit design and validation.
+
+---
+
+### 11.3 Historical Approved Data
+
+The approved historical persistence area is:
+
+```text
+data/historical/
+    ticks.db
+    renko.db
+```
+
+This area represents historical data that has passed the current manual validation process.
+
+The realtime application may rely on this data when reconstructing the current Renko state.
+
+Conceptually:
+
+```text
+Historical Staging
+        |
+        | validation
+        v
+Historical Approved
+        |
+        v
+Runtime Bootstrap
+```
+
+The distinction between staging and approved historical data is therefore a safety boundary, not accidental duplication.
+
+---
+
+### 11.4 Intraday Persistence
+
+Intraday runtime data is stored separately under:
+
+```text
+data/intraday/
+    ticks.db
+    renko.db
+```
+
+This persistence belongs to the current runtime/session lifecycle.
+
+Realtime market ticks are persisted through the intraday pipeline and realtime Renko bricks are persisted through the intraday Renko persistence path.
+
+Conceptually:
+
+```text
+Realtime market feed
+        |
+        v
+IntradayMarketPipeline
+        |
+        +--> data/intraday/ticks.db
+        |
+        v
+RenkoService
+        |
+        +--> data/intraday/renko.db
+```
+
+Intraday persistence is intentionally separated from approved historical persistence.
+
+---
+
+### 11.5 Reconstructible Intraday State
+
+Intraday persistence is reconstructible.
+
+At application startup, the intraday storage may be reset without deleting the approved historical dataset.
+
+The runtime can reconstruct its starting point using:
+
+```text
+Approved historical Renko state
+        +
+Current-day bootstrap data
+        |
+        v
+Current runtime state
+```
+
+Therefore, the lifecycle of intraday persistence differs fundamentally from the lifecycle of historical approved data.
+
+Resetting intraday storage must not imply resetting or modifying:
+
+```text
+data/historical/*
+data/trading/*
+```
+
+---
+
+### 11.6 Historical-to-Intraday Boundary
+
+The realtime Renko persistence path intentionally bridges historical and intraday lifecycles.
+
+Conceptually:
+
+```text
+READ INITIAL STATE
+
+data/historical/renko.db
+        |
+        v
+historical state / last closed brick
+        |
+        v
+bootstrap
+        |
+        v
+runtime
+
+
+WRITE CURRENT SESSION
+
+runtime
+        |
+        v
+current-day Renko bricks
+        |
+        v
+data/intraday/renko.db
+```
+
+This is an intentional dependency.
+
+The runtime uses approved historical data as its trusted starting point while keeping current-session persistence separate.
+
+---
+
+### 11.7 Trading Persistence
+
+Trading state has its own persistence lifecycle:
+
+```text
+data/trading/trading.db
+```
+
+Trading persistence stores logical trading operations managed by the platform.
+
+Conceptually:
+
+```text
+TradingService
+        |
+        v
+OperationManager
+        |
+        v
+TradingOperationRepository
+        |
+        v
+data/trading/trading.db
+```
+
+Unlike intraday market persistence, trading state must not be treated as disposable runtime cache.
+
+Trading operations may need to survive application restarts and preserve their logical identity and execution state.
+
+---
+
+### 11.8 Persistence Domain Separation
+
+The current persistence model maintains useful domain boundaries:
+
+```text
+HISTORICAL STAGING
+    production and validation
+          |
+          v
+HISTORICAL APPROVED
+    trusted historical source
+          |
+          v
+INTRADAY
+    reconstructible runtime data
+
+
+TRADING
+    persistent operation state
+```
+
+Market/Renko persistence and trading-operation persistence serve different purposes.
+
+The architecture should avoid introducing unnecessary coupling such as storing trading operations inside intraday market databases or storing Renko market state inside the trading database.
+
+---
+
+### 11.9 Database Lifecycle Summary
+
+The current lifecycle can be summarized as:
+
+```text
+data/ticks.db
+data/renko.db
+    |
+    | Historical staging
+    | Produced manually through main.py
+    | Validated before promotion
+    v
+
+data/historical/ticks.db
+data/historical/renko.db
+    |
+    | Approved historical data
+    | Trusted by runtime bootstrap
+    v
+
+data/intraday/ticks.db
+data/intraday/renko.db
+    |
+    | Current runtime/session
+    | Reconstructible
+    v
+
+data/trading/trading.db
+    |
+    | Logical trading operations
+    | Persistent across runtime sessions
+    v
+```
+
+The four lifecycle roles are therefore:
+
+```text
+STAGING
+    temporary production/validation area
+
+APPROVED HISTORICAL
+    trusted historical source
+
+INTRADAY
+    reconstructible current-session state
+
+TRADING
+    persistent operation state
+```
+
+---
+
+### 11.10 Current Architecture Observation
+
+The current persistence separation is broadly aligned with the application's operational requirements.
+
+No major persistence redesign is currently required.
+
+In particular, the existence of:
+
+```text
+data/ticks.db
+data/renko.db
+```
+
+together with:
+
+```text
+data/historical/ticks.db
+data/historical/renko.db
+```
+
+is intentional.
+
+The first pair represents historical staging.
+
+The second pair represents manually validated historical data approved for runtime use.
+
+Future architecture work may improve naming, configuration or encapsulation around these persistence areas, but such changes must preserve their lifecycle semantics.
+
+Refactoring should not remove a persistence boundary merely to reduce the number of database files.
+
+---
+
+### 11.11 Protected Persistence Invariants
+
+The following persistence behaviors must be preserved during the current architectural reorganization:
+
+1. `main.py` remains a manual historical collection and Renko-processing tool.
+
+2. Historical data produced by `main.py` remains separate from the approved historical dataset until validation occurs.
+
+3. Promotion from historical staging to approved historical data remains manual during the current refactoring.
+
+4. The current refactoring must not cause `main.py` to overwrite approved historical databases directly.
+
+5. `data/historical/` remains the trusted historical source used by the runtime bootstrap.
+
+6. Intraday persistence remains separate from approved historical persistence.
+
+7. Intraday state remains reconstructible from approved historical state and current-day market data.
+
+8. Resetting intraday storage must not delete or reset approved historical data.
+
+9. Resetting intraday storage must not delete or reset trading-operation persistence.
+
+10. Trading persistence remains logically separate from market tick and Renko persistence.
+
+11. Trading operations must not be treated as disposable intraday state.
+
+12. Architectural reorganization must preserve the distinct lifecycle semantics of staging, approved historical, intraday and trading persistence.
+
+13. Automating historical validation or promotion is outside the scope of the current architectural refactoring.
