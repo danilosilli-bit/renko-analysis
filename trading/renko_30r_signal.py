@@ -21,7 +21,7 @@ class Renko30RSignal:
         bricks: list[dict],
     ) -> dict:
 
-        if len(bricks) < 2:
+        if len(bricks) < 1:
             return {
                 "ready": False,
                 "direction": None,
@@ -31,13 +31,18 @@ class Renko30RSignal:
                 "last_brick": None,
                 "previous_brick": None,
                 "reason": (
-                    "São necessários pelo menos "
-                    "dois Renko 30R fechados."
+                    "É necessário pelo menos "
+                    "um Renko 30R fechado."
                 ),
             }
 
         last_brick = bricks[-1]
-        previous_brick = bricks[-2]
+
+        previous_brick = (
+            bricks[-2]
+            if len(bricks) >= 2
+            else None
+        )
 
         direction = last_brick.get(
             "direction"
@@ -52,7 +57,7 @@ class Renko30RSignal:
                 "can_sell": False,
                 "max_stop_price": (
                     float(
-                        previous_brick["low"]
+                        last_brick["low"]
                     )
                     - self.STOP_OFFSET
                 ),
@@ -73,7 +78,7 @@ class Renko30RSignal:
                 "can_sell": True,
                 "max_stop_price": (
                     float(
-                        previous_brick["high"]
+                        last_brick["high"]
                     )
                     + self.STOP_OFFSET
                 ),

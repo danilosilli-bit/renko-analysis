@@ -51,12 +51,12 @@ def test_buy_signal():
 
     assert (
         result["max_stop_price"]
-        == 184330.0
+        == 184480.0
     )
 
     assert (
-        result["previous_brick"]["low"]
-        == 184350.0
+        result["last_brick"]["low"]
+        == 184500.0
     )
 
     print("")
@@ -97,28 +97,21 @@ def test_sell_signal():
 
     assert (
         result["max_stop_price"]
-        == 184520.0
+        == 184370.0
     )
 
     assert (
-        result["previous_brick"]["high"]
-        == 184500.0
+        result["last_brick"]["high"]
+        == 184350.0
     )
 
     print("")
     print("SELL SIGNAL")
     print(result)
 
-
 def test_not_ready():
 
-    bricks = [
-        {
-            "direction": "UP",
-            "high": 184500.0,
-            "low": 184350.0,
-        },
-    ]
+    bricks = []
 
     service = FakeRenkoService(
         bricks
@@ -131,11 +124,13 @@ def test_not_ready():
     )
 
     assert result["ready"] is False
+    assert result["direction"] is None
     assert result["can_buy"] is False
     assert result["can_sell"] is False
     assert result["max_stop_price"] is None
+    assert result["last_brick"] is None
+    assert result["previous_brick"] is None
 
     print("")
     print("NOT READY")
     print(result)
-    
