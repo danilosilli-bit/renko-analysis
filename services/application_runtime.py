@@ -3,7 +3,9 @@ from __future__ import annotations
 from config.storage_config import HISTORICAL_RENKO_DB
 from storage.renko_repository import RenkoRepository
 from storage.sqlite_manager import SQLiteManager
+from storage.intraday_repository import IntradayRepository
 from storage.intraday_storage import reset_intraday_storage
+
 
 class ApplicationRuntime:
     """
@@ -25,18 +27,37 @@ class ApplicationRuntime:
     Those responsibilities remain in their existing components.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        historical_symbol: str,
+        intraday_symbol: str,
+    ) -> None:
+        self.historical_symbol = historical_symbol
+        self.intraday_symbol = intraday_symbol
+        self.intraday_repository = None
+
         self.started = False
         self.historical_repository = None
 
     def _reset_intraday_storage(self) -> None:
         """
-        Reset reconstructible intraday persistence before startup.
+        Reset the intraday storage used by the current session.
 
-        Approved historical and trading persistence are not part
-        of this reset.
+        The actual reset behavior remains implemented by the
+        existing storage component.
         """
         reset_intraday_storage()
+
+    def _prepare_intraday_repository(self) -> None:
+        self.intraday_repository = IntradayRepository()
+
+        self.intraday_repository.prepare_symbol(
+            self.historical_symbol
+        )
+
+        self.intraday_repository.prepare_symbol(
+            self.intraday_symbol
+        )
 
     def _open_historical_repository(self) -> None:
         historical_db = SQLiteManager(
@@ -59,6 +80,7 @@ class ApplicationRuntime:
         """
         self._reset_intraday_storage()
         self._open_historical_repository()
+        self._prepare_intraday_repository()
 
     def stop(self) -> None:
         """
