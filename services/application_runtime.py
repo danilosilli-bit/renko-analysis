@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from storage.intraday_storage import reset_intraday_storage
+
 
 class ApplicationRuntime:
     """
@@ -22,15 +24,23 @@ class ApplicationRuntime:
     """
 
     def __init__(self) -> None:
-        # Runtime lifecycle state
         self.started = False
+
+    def _reset_intraday_storage(self) -> None:
+        """
+        Reset reconstructible intraday persistence before startup.
+
+        Approved historical and trading persistence are not part
+        of this reset.
+        """
+        reset_intraday_storage()
 
     def start(self) -> None:
         """
         Start the market/Renko runtime.
 
-        The implementation will be migrated incrementally from
-        api/app.py only after each responsibility has been reviewed.
+        Responsibilities will be migrated incrementally from
+        api/app.py.
         """
         raise NotImplementedError(
             "ApplicationRuntime.start() is not implemented yet."
