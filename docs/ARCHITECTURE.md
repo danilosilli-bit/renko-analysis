@@ -335,3 +335,164 @@ The following areas require further analysis before this architecture document i
 * diagnostic and maintenance tooling.
 
 These sections will be added incrementally as each part of the system is reviewed.
+
+## 8. Historical Processing Flow
+
+The historical processing flow is currently started manually through `main.py`.
+
+Its purpose is to collect historical market ticks from MetaTrader 5 and/or generate historical Renko bricks from previously stored ticks.
+
+### 8.1 Execution Modes
+
+`main.py` currently supports three execution modes:
+
+* `collect_only`
+* `renko_only`
+* `collect_and_renko`
+
+This allows tick collection and Renko generation to be executed independently or sequentially.
+
+Symbols, dates and execution parameters are currently configured manually in `main.py`.
+
+---
+
+### 8.2 Historical Tick Collection
+
+The historical tick collection flow is:
+
+```text
+main.py
+   |
+   v
+MT5Client
+   |
+   v
+TickCollector
+   |
+   v
+tick_transformer.normalize_ticks()
+   |
+   v
+TickRepository
+   |
+   v
+Historical tick database
+```
+
+Responsibilities:
+
+#### `MT5Client`
+
+Provides access to MetaTrader 5 historical tick data.
+
+Its responsibility is primarily communication with MT5.
+
+#### `TickCollector`
+
+Coordinates historical tick collection for the requested symbol and time period.
+
+#### `tick_transformer`
+
+Normalizes and enriches collected tick data before persistence.
+
+Current processing includes operations related to:
+
+* timestamp normalization;
+* duplicate handling;
+* volume filtering;
+* buy/sell quantities;
+* financial values;
+* auction-related information.
+
+#### `TickRepository`
+
+Persists and retrieves historical tick data using SQLite.
+
+---
+
+### 8.3 Historical Renko Generation
+
+Historical Renko generation uses ticks previously persisted in the historical tick database.
+
+The current flow is:
+
+```text
+Historical tick database
+        |
+        v
+TickRepository
+        |
+        v
+InstrumentConfig
+        |
+        v
+RenkoEngine
+        |
+        v
+RenkoRepository
+        |
+        v
+Historical Renko database
+```
+
+#### `InstrumentConfig`
+
+Provides instrument-specific configuration required by Renko processing, including information such as tick size, price precision and configured Renko sizes.
+
+#### `RenkoEngine`
+
+Processes the historical tick sequence and generates Renko bricks according to the configured instrument and Renko size.
+
+The current engine also interacts directly with a Renko repository for persistence.
+
+This dependency is part of the current architecture and will be reviewed later. No change is currently planned.
+
+#### `RenkoRepository`
+
+Persists historical Renko bricks and associated Renko state.
+
+---
+
+### 8.4 Current Historical Flow Assessment
+
+The historical flow currently has reasonably separated responsibilities for:
+
+* MT5 access;
+* tick collection;
+* tick transformation;
+* tick persistence;
+* instrument configuration;
+* Renko processing;
+* Renko persistence.
+
+The current `main.py` combines execution configuration and orchestration.
+
+For example, symbols, dates and execution modes are currently defined directly in the source code.
+
+This works for the current manual workflow but may later be replaced by command-line parameters or another configuration mechanism.
+
+No change is required at this stage.
+
+---
+
+### 8.5 Known Architecture Observation
+
+`RenkoEngine` currently knows about Renko persistence through a repository.
+
+Conceptually, the current relationship includes:
+
+```text
+RenkoEngine
+    |
+    +-- Renko generation logic
+    |
+    +-- Renko persistence interaction
+```
+
+A possible future architecture could separate Renko generation from persistence orchestration.
+
+However, `RenkoEngine` participates in multiple processing flows, including historical, intraday and realtime processing.
+
+For this reason, this dependency must only be reconsidered after those flows have also been documented and understood.
+
+No refactoring decision has been made.
