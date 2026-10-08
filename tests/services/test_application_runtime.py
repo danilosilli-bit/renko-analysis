@@ -55,6 +55,10 @@ def test_start_initializes_current_startup_steps():
         runtime, "_persist_bootstrap_bricks", calls.persist,
     ), patch.object(
         runtime, "_initialize_market_runtimes", calls.runtimes,
+    ), patch.object(
+        runtime, "_prepare_source_handoffs", calls.handoffs,
+    ), patch.object(
+        runtime, "_prepare_market_pipelines", calls.pipelines,
     ):
         calls.fetch.return_value = ["tick1", "tick2"]
         calls.replay.return_value = {
@@ -74,6 +78,8 @@ def test_start_initializes_current_startup_steps():
         call.snapshot(),
         call.persist(),
         call.runtimes(),
+        call.handoffs(),
+        call.pipelines(),
     ]
 
     assert runtime.bootstrap_result == {
@@ -388,4 +394,145 @@ def test_initialize_market_runtimes_from_same_snapshot():
         snapshot=snapshot,
         intraday_repository=intraday_repository.renko_repository,
         intraday_symbol="CFD_TEST",
+    )
+
+def test_prepare_source_handoffs():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+    )
+
+    runtime.bootstrap_result = {
+        "processed_ticks": 2,
+        "last_timestamp_ms": 123456,
+    }
+
+    with patch(
+        "services.application_runtime.SourceHandoffService"
+    ) as handoff_class:
+        runtime._prepare_source_handoffs()
+
+    assert handoff_class.call_args_list == [
+        call(
+            last_bootstrap_timestamp_ms=123456,
+            from_source="FUTURES",
+            from_symbol="WIN_TEST",
+            to_source="FUTURES",
+            to_symbol="WIN_TEST",
+        ),
+        call(
+            last_bootstrap_timestamp_ms=123456,
+            from_source="FUTURES",
+            from_symbol="WIN_TEST",
+            to_source="CFD",
+            to_symbol="CFD_TEST",
+        ),
+    ]
+
+
+def test_prepare_market_pipelines():
+    win_service = Mock()
+    cfd_service = Mock()
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=win_service,
+        cfd_renko_service=cfd_service,
+    )
+
+    runtime.intraday_repository = Mock()
+
+    with patch(
+        "services.application_runtime.IntradayMarketPipeline"
+    ) as pipeline_class:
+        runtime._prepare_market_pipelines()
+
+    tick_repository = runtime.intraday_repository.tick_repository
+
+    assert pipeline_class.call_args_list == [
+        call(
+            tick_repository=tick_repository,
+            renko_service=win_service,
+            symbol="WIN_TEST",
+            source_type="FUTURES",
+        ),
+        call(
+            tick_repository=tick_repository,
+            renko_service=cfd_service,
+            symbol="CFD_TEST",
+            source_type="CFD",
+        ),
+    ]
+
+    import pytest
+
+
+@pytest.mark.parametrize("market", ["win", "cfd"])
+def test_realtime_tick_rejected_by_handoff(market):
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+    )
+
+    handoff = Mock()
+    handoff.accept_realtime_tick.return_value = {
+        "accepted": False,
+        "source_transition": False,
+    }
+
+    pipeline = Mock()
+    setattr(runtime, f"{market}_source_handoff_service", handoff)
+    setattr(runtime, f"{market}_intraday_pipeline", pipeline)
+
+    tick = Mock(timestamp_ms=123457)
+
+    getattr(runtime, f"handle_{market}_realtime_tick")(tick)
+
+    handoff.accept_realtime_tick.assert_called_once_with(123457)
+    pipeline.process_realtime_tick.assert_not_called()
+
+
+@pytest.mark.parametrize("market", ["win", "cfd"])
+def test_first_realtime_tick_preserves_source_transition(market):
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+    )
+
+    handoff = Mock()
+    handoff.accept_realtime_tick.return_value = {
+        "accepted": True,
+        "source_transition": True,
+    }
+
+    pipeline = Mock()
+    setattr(runtime, f"{market}_source_handoff_service", handoff)
+    setattr(runtime, f"{market}_intraday_pipeline", pipeline)
+
+    tick = Mock(timestamp_ms=123457)
+
+    getattr(runtime, f"handle_{market}_realtime_tick")(tick)
+
+    pipeline.process_realtime_tick.assert_called_once_with(
+        tick,
+        source_transition=True,
     )

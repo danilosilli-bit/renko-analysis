@@ -6,6 +6,8 @@ from storage.sqlite_manager import SQLiteManager
 from storage.intraday_repository import IntradayRepository
 from storage.intraday_storage import reset_intraday_storage
 from services.renko_service import RenkoService
+from services.source_handoff_service import SourceHandoffService
+from services.intraday_market_pipeline import IntradayMarketPipeline
 
 from ingestion.mt5_intraday_history_client import (
     MT5IntradayHistoryClient,
@@ -59,6 +61,48 @@ class ApplicationRuntime:
         self.intraday_repository = None
         self.bootstrap_result = None
         self.runtime_snapshot = None
+
+        self.win_source_handoff_service = None
+        self.cfd_source_handoff_service = None
+
+        self.win_intraday_pipeline = None
+        self.cfd_intraday_pipeline = None
+
+    def _prepare_source_handoffs(self) -> None:
+        last_timestamp_ms = self.bootstrap_result[
+            "last_timestamp_ms"
+        ]
+
+        self.win_source_handoff_service = SourceHandoffService(
+            last_bootstrap_timestamp_ms=last_timestamp_ms,
+            from_source="FUTURES",
+            from_symbol=self.historical_symbol,
+            to_source="FUTURES",
+            to_symbol=self.historical_symbol,
+        )
+
+        self.cfd_source_handoff_service = SourceHandoffService(
+            last_bootstrap_timestamp_ms=last_timestamp_ms,
+            from_source="FUTURES",
+            from_symbol=self.historical_symbol,
+            to_source="CFD",
+            to_symbol=self.intraday_symbol,
+        )
+
+    def _prepare_market_pipelines(self) -> None:
+        self.win_intraday_pipeline = IntradayMarketPipeline(
+            tick_repository=self.intraday_repository.tick_repository,
+            renko_service=self.win_renko_service,
+            symbol=self.historical_symbol,
+            source_type="FUTURES",
+        )
+
+        self.cfd_intraday_pipeline = IntradayMarketPipeline(
+            tick_repository=self.intraday_repository.tick_repository,
+            renko_service=self.cfd_renko_service,
+            symbol=self.intraday_symbol,
+            source_type="CFD",
+        )
 
     def _create_runtime_snapshot(self) -> None:
         self.runtime_snapshot = (
@@ -124,6 +168,8 @@ class ApplicationRuntime:
         self._create_runtime_snapshot()
         self._persist_bootstrap_bricks()
         self._initialize_market_runtimes()
+        self._prepare_source_handoffs()
+        self._prepare_market_pipelines()        
 
     def stop(self) -> None:
         """
@@ -198,4 +244,43 @@ class ApplicationRuntime:
             snapshot=self.runtime_snapshot,
             intraday_repository=self.intraday_repository.renko_repository,
             intraday_symbol=self.intraday_symbol,
+        )
+
+    def handle_win_realtime_tick(self, tick) -> None:
+        if (
+            self.win_source_handoff_service is None
+            or self.win_intraday_pipeline is None
+        ):
+            return
+
+        result = self.win_source_handoff_service.accept_realtime_tick(
+            tick.timestamp_ms
+        )
+
+        if not result["accepted"]:
+            return
+
+        self.win_intraday_pipeline.process_realtime_tick(
+            tick,
+            source_transition=result["source_transition"],
+        )
+
+
+    def handle_cfd_realtime_tick(self, tick) -> None:
+        if (
+            self.cfd_source_handoff_service is None
+            or self.cfd_intraday_pipeline is None
+        ):
+            return
+
+        result = self.cfd_source_handoff_service.accept_realtime_tick(
+            tick.timestamp_ms
+        )
+
+        if not result["accepted"]:
+            return
+
+        self.cfd_intraday_pipeline.process_realtime_tick(
+            tick,
+            source_transition=result["source_transition"],
         )
