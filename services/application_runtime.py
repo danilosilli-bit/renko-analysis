@@ -5,6 +5,8 @@ from storage.renko_repository import RenkoRepository
 from storage.sqlite_manager import SQLiteManager
 from storage.intraday_repository import IntradayRepository
 from storage.intraday_storage import reset_intraday_storage
+from services.renko_service import RenkoService
+
 
 
 class ApplicationRuntime:
@@ -31,13 +33,16 @@ class ApplicationRuntime:
         self,
         historical_symbol: str,
         intraday_symbol: str,
+        bootstrap_renko_service: RenkoService,
     ) -> None:
         self.historical_symbol = historical_symbol
         self.intraday_symbol = intraday_symbol
-        self.intraday_repository = None
+        self.bootstrap_renko_service = bootstrap_renko_service
+        
 
         self.started = False
         self.historical_repository = None
+        self.intraday_repository = None
 
     def _reset_intraday_storage(self) -> None:
         """
@@ -57,6 +62,21 @@ class ApplicationRuntime:
 
         self.intraday_repository.prepare_symbol(
             self.intraday_symbol
+        )
+
+    def _initialize_historical_renko(self) -> None:
+        """
+        Initialize the common Renko state from approved history.
+
+        This happens before today's XP tick replay and before
+        the WIN/CFD runtime bifurcation.
+        """
+        self.bootstrap_renko_service.initialize_from_history(
+            historical_repository=self.historical_repository,
+            intraday_repository=self.intraday_repository.renko_repository,
+            historical_symbol=self.historical_symbol,
+            intraday_symbol=self.historical_symbol,
+            defer_persistence=True,
         )
 
     def _open_historical_repository(self) -> None:
@@ -81,6 +101,7 @@ class ApplicationRuntime:
         self._reset_intraday_storage()
         self._open_historical_repository()
         self._prepare_intraday_repository()
+        self._initialize_historical_renko()
 
     def stop(self) -> None:
         """

@@ -1,12 +1,14 @@
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from services.application_runtime import ApplicationRuntime
+
 
 
 def test_reset_intraday_storage_delegates_to_storage():
     runtime = ApplicationRuntime(
         historical_symbol="WIN_TEST",
         intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
     )
 
     with patch(
@@ -18,27 +20,39 @@ def test_reset_intraday_storage_delegates_to_storage():
 
 
 def test_start_initializes_current_startup_steps():
+    calls = Mock()
+
     runtime = ApplicationRuntime(
         historical_symbol="WIN_TEST",
         intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
     )
 
     with patch.object(
         runtime,
         "_reset_intraday_storage",
-    ) as reset_mock, patch.object(
+        calls.reset,
+    ), patch.object(
         runtime,
         "_open_historical_repository",
-    ) as historical_mock, patch.object(
+        calls.historical,
+    ), patch.object(
         runtime,
         "_prepare_intraday_repository",
-    ) as intraday_mock:
-
+        calls.intraday,
+    ), patch.object(
+        runtime,
+        "_initialize_historical_renko",
+        calls.renko,
+    ):
         runtime.start()
 
-    reset_mock.assert_called_once_with()
-    historical_mock.assert_called_once_with()
-    intraday_mock.assert_called_once_with()
+    assert calls.mock_calls == [
+        call.reset(),
+        call.historical(),
+        call.intraday(),
+        call.renko(),
+    ]
 
     assert runtime.started is False
 
@@ -47,6 +61,7 @@ def test_open_historical_repository_stores_repository():
     runtime = ApplicationRuntime(
         historical_symbol="WIN_TEST",
         intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
     )
 
     with patch(
@@ -69,6 +84,7 @@ def test_runtime_stores_market_symbols():
     runtime = ApplicationRuntime(
         historical_symbol="WIN_TEST",
         intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
     )
 
     assert runtime.historical_symbol == "WIN_TEST"
@@ -78,6 +94,7 @@ def test_prepare_intraday_repository_prepares_both_symbols():
     runtime = ApplicationRuntime(
         historical_symbol="WIN_TEST",
         intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
     )
 
     with patch(
@@ -95,4 +112,29 @@ def test_prepare_intraday_repository_prepares_both_symbols():
     repository.prepare_symbol.assert_any_call("CFD_TEST")
 
     assert runtime.intraday_repository is repository
+
+def test_initialize_historical_renko_uses_common_win_state():
+    bootstrap_service = Mock()
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=bootstrap_service,
+    )
+
+    historical_repository = Mock()
+    intraday_repository = Mock()
+
+    runtime.historical_repository = historical_repository
+    runtime.intraday_repository = intraday_repository
+
+    runtime._initialize_historical_renko()
+
+    bootstrap_service.initialize_from_history.assert_called_once_with(
+        historical_repository=historical_repository,
+        intraday_repository=intraday_repository.renko_repository,
+        historical_symbol="WIN_TEST",
+        intraday_symbol="WIN_TEST",
+        defer_persistence=True,
+    )
     
