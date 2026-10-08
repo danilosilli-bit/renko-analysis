@@ -72,6 +72,7 @@ pipeline = IntradayMarketPipeline(
     tick_repository=intraday.tick_repository,
     renko_service=renko_service,
     symbol=INTRADAY_SYMBOL,
+    source_type="CFD",
 )
 
 

@@ -15,7 +15,8 @@ def create_buy_operation():
         entry_price=183800.0,
         max_stop_price=183540.0,
         current_stop_price=183540.0,
-        mt5_ticket=123456,
+        mt5_order_ticket=123456,
+        mt5_position_ticket=123456,
         status="OPEN",
     )
 
@@ -32,7 +33,8 @@ def create_sell_operation():
         entry_price=183800.0,
         max_stop_price=184265.0,
         current_stop_price=184265.0,
-        mt5_ticket=654321,
+        mt5_order_ticket=654321,
+        mt5_position_ticket=654321,
         status="OPEN",
     )
 

@@ -25,7 +25,8 @@ def test_create_operation():
     assert operation.volume == 1.0
 
     assert operation.entry_price is None
-    assert operation.mt5_ticket is None
+    assert operation.mt5_order_ticket is None
+    assert operation.mt5_position_ticket is None
 
     assert (
         operation.max_stop_price
@@ -162,10 +163,10 @@ def test_mark_operation_open():
     )
 
     manager.mark_open(
-        operation_id=
-            operation.operation_id,
+        operation_id=operation.operation_id,
         entry_price=183800.0,
-        mt5_ticket=123456,
+        mt5_order_ticket=123456,
+        mt5_position_ticket=123456,
     )
 
     assert operation.status == "OPEN"
@@ -175,10 +176,8 @@ def test_mark_operation_open():
         == 183800.0
     )
 
-    assert (
-        operation.mt5_ticket
-        == 123456
-    )
+    assert operation.mt5_order_ticket == 123456
+    assert operation.mt5_position_ticket == 123456
 
     # O stop máximo não muda quando
     # recebemos os dados do broker.
@@ -202,10 +201,10 @@ def test_mark_operation_closed():
     )
 
     manager.mark_open(
-        operation_id=
-            operation.operation_id,
+        operation_id=operation.operation_id,
         entry_price=183800.0,
-        mt5_ticket=123456,
+        mt5_order_ticket=123456,
+        mt5_position_ticket=123456,
     )
 
     manager.mark_closed(
