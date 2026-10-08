@@ -11,6 +11,9 @@ def test_reset_intraday_storage_delegates_to_storage():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     with patch(
@@ -29,6 +32,9 @@ def test_start_initializes_current_startup_steps():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     with patch.object(
@@ -43,6 +49,12 @@ def test_start_initializes_current_startup_steps():
         runtime, "_fetch_today_xp_ticks", calls.fetch,
     ), patch.object(
         runtime, "_replay_today_xp_ticks", calls.replay,
+    ), patch.object(
+        runtime, "_create_runtime_snapshot", calls.snapshot,
+    ), patch.object(
+        runtime, "_persist_bootstrap_bricks", calls.persist,
+    ), patch.object(
+        runtime, "_initialize_market_runtimes", calls.runtimes,
     ):
         calls.fetch.return_value = ["tick1", "tick2"]
         calls.replay.return_value = {
@@ -59,6 +71,9 @@ def test_start_initializes_current_startup_steps():
         call.renko(),
         call.fetch(),
         call.replay(["tick1", "tick2"]),
+        call.snapshot(),
+        call.persist(),
+        call.runtimes(),
     ]
 
     assert runtime.bootstrap_result == {
@@ -75,6 +90,9 @@ def test_open_historical_repository_stores_repository():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     with patch(
@@ -99,6 +117,9 @@ def test_runtime_stores_market_symbols():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     assert runtime.historical_symbol == "WIN_TEST"
@@ -110,6 +131,9 @@ def test_prepare_intraday_repository_prepares_both_symbols():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),        
     )
 
     with patch(
@@ -136,6 +160,9 @@ def test_initialize_historical_renko_uses_common_win_state():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     historical_repository = Mock()
@@ -160,6 +187,9 @@ def test_fetch_today_xp_ticks_disconnects_after_success():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     with patch(
@@ -187,6 +217,9 @@ def test_fetch_today_xp_ticks_disconnects_after_error():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     with patch(
@@ -211,6 +244,9 @@ def test_replay_today_xp_ticks_processes_each_tick_once():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     raw_ticks = [object(), object()]
@@ -258,6 +294,9 @@ def test_replay_today_xp_ticks_with_no_ticks():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
     )
 
     result = runtime._replay_today_xp_ticks([])
@@ -268,3 +307,85 @@ def test_replay_today_xp_ticks_with_no_ticks():
     }
 
     bootstrap_service.process_intraday_tick.assert_not_called()    
+
+def test_create_runtime_snapshot():
+    bootstrap_service = Mock()
+    snapshot = object()
+    bootstrap_service.get_runtime_snapshot.return_value = snapshot
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=bootstrap_service,
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+    )
+
+    runtime._create_runtime_snapshot()
+
+    bootstrap_service.get_runtime_snapshot.assert_called_once_with()
+    assert runtime.runtime_snapshot is snapshot
+
+
+def test_persist_bootstrap_bricks_to_both_markets():
+    bootstrap_service = Mock()
+
+    repositories = {
+        10: Mock(),
+        30: Mock(),
+        45: Mock(),
+    }
+    bootstrap_service.repositories = repositories
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=bootstrap_service,
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+    )
+
+    runtime._persist_bootstrap_bricks()
+
+    for repository in repositories.values():
+        repository.persist_bricks.assert_called_once_with(
+            ["WIN_TEST", "CFD_TEST"]
+        )
+
+
+def test_initialize_market_runtimes_from_same_snapshot():
+    snapshot = object()
+    win_service = Mock()
+    cfd_service = Mock()
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=win_service,
+        cfd_renko_service=cfd_service,
+    )
+
+    intraday_repository = Mock()
+    runtime.intraday_repository = intraday_repository
+    runtime.runtime_snapshot = snapshot
+
+    runtime._initialize_market_runtimes()
+
+    win_service.initialize_from_snapshot.assert_called_once_with(
+        snapshot=snapshot,
+        intraday_repository=intraday_repository.renko_repository,
+        intraday_symbol="WIN_TEST",
+    )
+
+    cfd_service.initialize_from_snapshot.assert_called_once_with(
+        snapshot=snapshot,
+        intraday_repository=intraday_repository.renko_repository,
+        intraday_symbol="CFD_TEST",
+    )

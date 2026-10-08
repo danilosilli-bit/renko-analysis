@@ -41,17 +41,29 @@ class ApplicationRuntime:
         intraday_symbol: str,
         bootstrap_renko_service: RenkoService,
         xp_terminal_path: str,
+        brick_sizes: list[int],
+        win_renko_service: RenkoService,
+        cfd_renko_service: RenkoService,
     ) -> None:
         self.historical_symbol = historical_symbol
         self.intraday_symbol = intraday_symbol
         self.bootstrap_renko_service = bootstrap_renko_service
         self.xp_terminal_path = xp_terminal_path
+        self.brick_sizes = brick_sizes
+        self.win_renko_service = win_renko_service
+        self.cfd_renko_service = cfd_renko_service
         
 
         self.started = False
         self.historical_repository = None
         self.intraday_repository = None
         self.bootstrap_result = None
+        self.runtime_snapshot = None
+
+    def _create_runtime_snapshot(self) -> None:
+        self.runtime_snapshot = (
+            self.bootstrap_renko_service.get_runtime_snapshot()
+        )
 
     def _reset_intraday_storage(self) -> None:
         """
@@ -109,6 +121,10 @@ class ApplicationRuntime:
             today_ticks
         )
 
+        self._create_runtime_snapshot()
+        self._persist_bootstrap_bricks()
+        self._initialize_market_runtimes()
+
     def stop(self) -> None:
         """
         Stop the market/Renko runtime.
@@ -157,3 +173,29 @@ class ApplicationRuntime:
             "processed_ticks": processed_ticks,
             "last_timestamp_ms": last_timestamp_ms,
         }
+
+    def _persist_bootstrap_bricks(self) -> None:
+        for brick_size in self.brick_sizes:
+            repository = (
+                self.bootstrap_renko_service.repositories[brick_size]
+            )
+
+            repository.persist_bricks(
+                [
+                    self.historical_symbol,
+                    self.intraday_symbol,
+                ]
+            )
+
+    def _initialize_market_runtimes(self) -> None:
+        self.win_renko_service.initialize_from_snapshot(
+            snapshot=self.runtime_snapshot,
+            intraday_repository=self.intraday_repository.renko_repository,
+            intraday_symbol=self.historical_symbol,
+        )
+
+        self.cfd_renko_service.initialize_from_snapshot(
+            snapshot=self.runtime_snapshot,
+            intraday_repository=self.intraday_repository.renko_repository,
+            intraday_symbol=self.intraday_symbol,
+        )
