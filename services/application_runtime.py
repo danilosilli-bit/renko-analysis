@@ -8,6 +8,8 @@ from storage.intraday_storage import reset_intraday_storage
 from services.renko_service import RenkoService
 from services.source_handoff_service import SourceHandoffService
 from services.intraday_market_pipeline import IntradayMarketPipeline
+from ingestion.mt5_realtime_client import MT5RealtimeClient
+from services.dual_mt5_feed_service import DualMT5FeedService
 
 from ingestion.mt5_intraday_history_client import (
     MT5IntradayHistoryClient,
@@ -46,6 +48,7 @@ class ApplicationRuntime:
         brick_sizes: list[int],
         win_renko_service: RenkoService,
         cfd_renko_service: RenkoService,
+        activtrades_terminal_path: str,
     ) -> None:
         self.historical_symbol = historical_symbol
         self.intraday_symbol = intraday_symbol
@@ -54,7 +57,7 @@ class ApplicationRuntime:
         self.brick_sizes = brick_sizes
         self.win_renko_service = win_renko_service
         self.cfd_renko_service = cfd_renko_service
-        
+        self.activtrades_terminal_path = activtrades_terminal_path
 
         self.started = False
         self.historical_repository = None
@@ -67,6 +70,9 @@ class ApplicationRuntime:
 
         self.win_intraday_pipeline = None
         self.cfd_intraday_pipeline = None
+
+        self.cfd_symbol_spec = None
+        self.dual_feed_service = None
 
     def _prepare_source_handoffs(self) -> None:
         last_timestamp_ms = self.bootstrap_result[
@@ -169,18 +175,17 @@ class ApplicationRuntime:
         self._persist_bootstrap_bricks()
         self._initialize_market_runtimes()
         self._prepare_source_handoffs()
-        self._prepare_market_pipelines()        
+        self._prepare_market_pipelines()    
+        self._load_cfd_symbol_spec()
+        self._start_dual_feed()
+        self.started = True    
 
     def stop(self) -> None:
-        """
-        Stop the market/Renko runtime.
-
-        Shutdown behavior will be migrated incrementally from
-        api/app.py.
-        """
-        raise NotImplementedError(
-            "ApplicationRuntime.stop() is not implemented yet."
-        )
+        try:
+            if self.dual_feed_service is not None:
+                self.dual_feed_service.stop()
+        finally:
+            self.started = False
 
     def _fetch_today_xp_ticks(self):
         client = MT5IntradayHistoryClient(
@@ -284,3 +289,49 @@ class ApplicationRuntime:
             tick,
             source_transition=result["source_transition"],
         )
+
+    def _load_cfd_symbol_spec(self) -> None:
+        client = MT5RealtimeClient(
+            path=self.activtrades_terminal_path
+        )
+
+        try:
+            client.connect()
+            self.cfd_symbol_spec = client.get_symbol_spec(
+                self.intraday_symbol
+            )
+        except Exception as exc:
+            print(
+                "Não foi possível carregar "
+                f"a especificação CFD: {exc}"
+            )
+            self.cfd_symbol_spec = None
+        finally:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+
+    def _start_dual_feed(self) -> None:
+        feed = DualMT5FeedService(
+            win_terminal_path=self.xp_terminal_path,
+            win_symbol=self.historical_symbol,
+            cfd_terminal_path=self.activtrades_terminal_path,
+            cfd_symbol=self.intraday_symbol,
+            poll_interval=0.02,
+        )
+
+        self.dual_feed_service = feed
+
+        feed.set_win_callback(
+            self.handle_win_realtime_tick
+        )
+        feed.set_cfd_callback(
+            self.handle_cfd_realtime_tick
+        )
+
+        try:
+            feed.start()
+        except Exception:
+            feed.stop()
+            raise

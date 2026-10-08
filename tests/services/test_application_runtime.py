@@ -11,6 +11,7 @@ def test_reset_intraday_storage_delegates_to_storage():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -32,6 +33,7 @@ def test_start_initializes_current_startup_steps():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -59,6 +61,10 @@ def test_start_initializes_current_startup_steps():
         runtime, "_prepare_source_handoffs", calls.handoffs,
     ), patch.object(
         runtime, "_prepare_market_pipelines", calls.pipelines,
+    ),patch.object(
+    runtime, "_load_cfd_symbol_spec", calls.spec,
+    ), patch.object(
+        runtime, "_start_dual_feed", calls.feed,
     ):
         calls.fetch.return_value = ["tick1", "tick2"]
         calls.replay.return_value = {
@@ -80,6 +86,8 @@ def test_start_initializes_current_startup_steps():
         call.runtimes(),
         call.handoffs(),
         call.pipelines(),
+        call.spec(),
+        call.feed(),
     ]
 
     assert runtime.bootstrap_result == {
@@ -87,7 +95,7 @@ def test_start_initializes_current_startup_steps():
         "last_timestamp_ms": 123456,
     }
 
-    assert runtime.started is False
+    assert runtime.started is True
 
 
 def test_open_historical_repository_stores_repository():
@@ -96,6 +104,7 @@ def test_open_historical_repository_stores_repository():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -123,6 +132,7 @@ def test_runtime_stores_market_symbols():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -137,6 +147,7 @@ def test_prepare_intraday_repository_prepares_both_symbols():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),        
@@ -166,6 +177,7 @@ def test_initialize_historical_renko_uses_common_win_state():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -193,6 +205,7 @@ def test_fetch_today_xp_ticks_disconnects_after_success():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -223,6 +236,7 @@ def test_fetch_today_xp_ticks_disconnects_after_error():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -250,6 +264,7 @@ def test_replay_today_xp_ticks_processes_each_tick_once():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -300,6 +315,7 @@ def test_replay_today_xp_ticks_with_no_ticks():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -324,6 +340,7 @@ def test_create_runtime_snapshot():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -350,6 +367,7 @@ def test_persist_bootstrap_bricks_to_both_markets():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=bootstrap_service,
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -373,6 +391,7 @@ def test_initialize_market_runtimes_from_same_snapshot():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=win_service,
         cfd_renko_service=cfd_service,
@@ -402,6 +421,7 @@ def test_prepare_source_handoffs():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -444,6 +464,7 @@ def test_prepare_market_pipelines():
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=win_service,
         cfd_renko_service=cfd_service,
@@ -483,6 +504,7 @@ def test_realtime_tick_rejected_by_handoff(market):
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -513,6 +535,7 @@ def test_first_realtime_tick_preserves_source_transition(market):
         intraday_symbol="CFD_TEST",
         bootstrap_renko_service=Mock(),
         xp_terminal_path="XP_TEST",
+        activtrades_terminal_path="ACTIVTRADES_TEST",
         brick_sizes=[10, 30, 45],
         win_renko_service=Mock(),
         cfd_renko_service=Mock(),
@@ -536,3 +559,157 @@ def test_first_realtime_tick_preserves_source_transition(market):
         tick,
         source_transition=True,
     )
+
+def test_load_cfd_symbol_spec():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    with patch(
+        "services.application_runtime.MT5RealtimeClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.get_symbol_spec.return_value = {"symbol": "CFD_TEST"}
+
+        runtime._load_cfd_symbol_spec()
+
+        client_class.assert_called_once_with(
+            path="ACTIVTRADES_TEST"
+        )
+        client.connect.assert_called_once()
+        client.get_symbol_spec.assert_called_once_with("CFD_TEST")
+        client.disconnect.assert_called_once()
+
+    assert runtime.cfd_symbol_spec == {"symbol": "CFD_TEST"}
+
+
+def test_load_cfd_symbol_spec_handles_error():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    with patch(
+        "services.application_runtime.MT5RealtimeClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.connect.side_effect = RuntimeError("MT5 unavailable")
+
+        runtime._load_cfd_symbol_spec()
+
+        client.disconnect.assert_called_once()
+
+    assert runtime.cfd_symbol_spec is None
+
+
+def test_start_dual_feed_registers_callbacks():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    with patch(
+        "services.application_runtime.DualMT5FeedService"
+    ) as feed_class:
+        runtime._start_dual_feed()
+
+        feed_class.assert_called_once_with(
+            win_terminal_path="XP_TEST",
+            win_symbol="WIN_TEST",
+            cfd_terminal_path="ACTIVTRADES_TEST",
+            cfd_symbol="CFD_TEST",
+            poll_interval=0.02,
+        )
+
+        feed = feed_class.return_value
+
+        feed.set_win_callback.assert_called_once_with(
+            runtime.handle_win_realtime_tick
+        )
+        feed.set_cfd_callback.assert_called_once_with(
+            runtime.handle_cfd_realtime_tick
+        )
+        feed.start.assert_called_once()
+
+    assert runtime.dual_feed_service is feed
+
+
+def test_start_dual_feed_cleans_up_on_error():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    with patch(
+        "services.application_runtime.DualMT5FeedService"
+    ) as feed_class:
+        feed = feed_class.return_value
+        feed.start.side_effect = RuntimeError("Worker failed")
+
+        with pytest.raises(RuntimeError, match="Worker failed"):
+            runtime._start_dual_feed()
+
+        feed.stop.assert_called_once()
+
+
+def test_stop_dual_feed():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    runtime.dual_feed_service = Mock()
+    runtime.started = True
+
+    runtime.stop()
+
+    runtime.dual_feed_service.stop.assert_called_once()
+    assert runtime.started is False
+
+
+def test_stop_without_feed():
+    runtime = ApplicationRuntime(
+        historical_symbol="WIN_TEST",
+        intraday_symbol="CFD_TEST",
+        bootstrap_renko_service=Mock(),
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=Mock(),
+        cfd_renko_service=Mock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    runtime.stop()
+
+    assert runtime.started is False
