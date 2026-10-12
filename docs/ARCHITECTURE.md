@@ -235,63 +235,48 @@ Its architecture will be documented separately after the backend flow is underst
 
 ### `scripts/`
 
-Contains manually executed utilities, diagnostics and older validation programs.
+Contains manually executed maintenance and operational utilities.
 
-The directory currently mixes different types of scripts.
+The reviewed `scripts/bootstrap_renko_db.py` remains in this directory. It can create a Renko table and insert an initial brick into its configured SQLite database; it must not be executed as part of automated test collection.
 
-A future organization may distinguish:
-
-* diagnostics;
-* maintenance;
-* operational utilities;
-* manual validation.
-
-No files will be moved until their purpose has been reviewed.
+The six reviewed MT5/Renko diagnostic scripts previously located here were moved to `tests/manual/`. This reorganization does not authorize moving or changing database maintenance tools.
 
 ---
 
 ### `tests/`
 
-Contains automated and semi-integrated validation of multiple parts of the system.
+Contains the automated test suite and separately isolated manual diagnostics.
 
-The current test collection includes different categories such as:
+Current test directories:
 
-* unit-like tests;
-* repository/database tests;
-* MT5 integration tests;
-* historical/intraday tests;
-* realtime runtime tests;
-* trading tests.
+* `tests/api/` — API-related automated tests;
+* `tests/integration/` — integration tests suitable for the configured automated suite;
+* `tests/manual/` — manually invoked diagnostics, including MT5-connected and database-sensitive scripts;
+* `tests/services/` — service-level automated tests;
+* `tests/storage/` — storage-related automated tests;
+* `tests/unit/` — unit tests.
 
-Some tests require external conditions such as an MT5 connection or available market data.
-
-The test architecture will be reviewed separately.
+`pytest.ini` restricts automatic discovery to `tests/api`, `tests/services`, `tests/storage`, `tests/unit`, and `tests/integration`. The manual directory is intentionally excluded. See Section 12 for validation and execution boundaries.
 
 ---
 
 ## 5. Manual Maintenance and Diagnostic Tools
 
-The project currently contains several manually executed files outside the normal application runtime.
+The project includes manually executed database-maintenance and diagnostic tools outside the normal realtime application runtime.
 
-These include files used for:
+The following tools are explicitly protected because they are used for database maintenance:
 
-* SQLite database maintenance;
-* Renko data manipulation;
-* MT5 diagnostics;
-* investigation of orders, deals, positions and tickets;
-* manual runtime validation.
+* `main.py` — manual historical tick collection and Renko processing;
+* `insert_renko.py` — manual Renko/database maintenance;
+* `test.py` — manually used database-maintenance tool (the working tree also reports a modified path named `test`; verify the exact local filename before documenting any invocation).
 
-Examples currently include:
+These tools must remain operational. Do not move, rename, remove, execute during automated tests, or change their imports, database paths, or behavior as part of structural cleanup without explicit review and approval.
 
-* `test`
-* `insert_renko.py`
-* `diagnose_mt5_ticket_relation.py`
-* `test_position_ticket_from_deal.py`
-* diagnostic scripts under `scripts/`
+`scripts/bootstrap_renko_db.py` is another manually invoked SQLite utility. It must not be included in automated execution.
 
-These files must not be considered obsolete solely because they are manually executed.
+Other manual diagnostics include MT5 connection/feed checks, runtime investigations, order/deal/position-ticket checks, and Renko validations. The reviewed diagnostics from `scripts/` and the former root of `tests/` are now grouped under `tests/manual/`; additional untracked root-level diagnostics remain outside that directory pending review.
 
-Their purpose will be documented before they are renamed, moved, divided or removed.
+A file must not be considered obsolete solely because it is manually executed. In particular, database-sensitive diagnostics may write data, reset intraday tables, or access MT5 and must not be run as part of routine architecture validation.
 
 ---
 
@@ -315,26 +300,27 @@ Architecture refactoring should not intentionally change trading rules or Renko 
 
 ---
 
-## 7. Areas Still to Be Documented
+## 7. Documentation Status and Remaining Areas
 
-The following areas require further analysis before this architecture document is considered complete:
+The following areas are now described in this document:
 
-* historical data flow;
-* intraday bootstrap flow;
-* realtime market flow;
-* XP and ActivTrades source responsibilities;
-* WIN and CFD runtime relationship;
-* source handoff;
-* Renko runtime lifecycle;
-* persistence architecture;
-* database schemas;
-* trading execution flow;
-* API architecture;
-* frontend architecture;
-* automated test architecture;
-* diagnostic and maintenance tooling.
+* historical data flow — Section 8;
+* intraday bootstrap, realtime sources, WIN/CFD bifurcation and source handoff — Section 9;
+* trading execution model and protected invariants — Section 10;
+* persistence lifecycles and database safety boundaries — Section 11;
+* automated test layout and manual diagnostic isolation — Section 12.
 
-These sections will be added incrementally as each part of the system is reviewed.
+The following areas still require more detailed analysis or separate documentation:
+
+* concrete SQLite schemas and migration/maintenance procedures;
+* detailed API endpoint and application-composition architecture;
+* frontend structure and interaction flow;
+* a complete inventory of manual diagnostic execution prerequisites and side effects;
+* any future target architecture (TO-BE), which must be proposed and approved separately.
+
+Documentation of current behavior does not authorize refactoring or changes to trading behavior.
+
+---
 
 ## 8. Historical Processing Flow
 
@@ -1712,3 +1698,78 @@ The following persistence behaviors must be preserved during the current archite
 12. Architectural reorganization must preserve the distinct lifecycle semantics of staging, approved historical, intraday and trading persistence.
 
 13. Automating historical validation or promotion is outside the scope of the current architectural refactoring.
+
+## 12. Test Architecture and Manual Diagnostics
+
+### 12.1 Automated Test Layout
+
+The automated test suite is organized into five discovery directories:
+
+```text
+tests/
+    api/
+    integration/
+    manual/          # excluded from automatic pytest discovery
+    services/
+    storage/
+    unit/
+```
+
+The repository's `pytest.ini` explicitly limits test discovery to:
+
+```ini
+[pytest]
+testpaths =
+    tests/api
+    tests/services
+    tests/storage
+    tests/unit
+    tests/integration
+
+python_files = test_*.py
+```
+
+Manual diagnostics must not be included in the default automated test run merely because their filenames begin with `test_`.
+
+### 12.2 Validation Baseline
+
+After the test and diagnostic reorganization, the following commands were run successfully on branch `feature/realtime-renko`:
+
+```powershell
+python -m pytest --collect-only -q
+python -m pytest -q
+```
+
+The observed result on 2026-10-12 was **111 tests collected, 111 passed**. This is an automated-suite baseline, not proof that every live MT5 integration or manual database-maintenance flow was exercised.
+
+The six reviewed diagnostics moved from `scripts/` to `tests/manual/` were committed in `9a706d7`. Their project-root calculation was updated from `Path(__file__).resolve().parent.parent` to `Path(__file__).resolve().parents[2]` to account for the new location; no other intended behavioral change was made.
+
+### 12.3 Manual Execution Boundary
+
+Scripts under `tests/manual/` are for deliberate, individually reviewed execution. Depending on the script, they may:
+
+* connect to a live MT5 terminal or consume realtime feeds;
+* read approved historical SQLite databases;
+* reset, truncate or write intraday SQLite data;
+* potentially write historical Renko data through a repository dependency.
+
+In particular, `tests/manual/test_historical_bootstrap_with_intraday_tick.py` must not be executed without first verifying that its repository wiring cannot write to approved historical storage.
+
+Routine collection, syntax checks and automated-suite execution must not invoke these scripts. Their operational correctness after relocation has not been established by a live manual execution.
+
+### 12.4 Protected Data and Maintenance Boundaries
+
+The following approved historical databases must never be reset or modified by architecture diagnostics:
+
+```text
+data/historical/ticks.db
+data/historical/renko.db
+```
+
+Intraday databases are separate and reconstructible during the intended runtime lifecycle, but must not be reset incidentally by test or documentation activities. Trading persistence is a separate persistent lifecycle and must not be treated as disposable test data.
+
+Manual maintenance tools (`main.py`, `insert_renko.py`, and the user's `test.py` tool) remain outside this reorganization and must continue working as before.
+
+### 12.5 Change Control
+
+Further test or script moves require dependency review, explicit approval, targeted validation, and selective commits. Unrelated modified or untracked files must not be staged automatically.
