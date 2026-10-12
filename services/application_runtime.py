@@ -198,7 +198,7 @@ class ApplicationRuntime:
                     f"falha no startup: {cleanup_error}"
                 )
 
-            raise  
+            raise
 
     def stop(self) -> None:
         try:

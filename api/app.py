@@ -48,6 +48,8 @@ from ingestion.mt5_realtime_client import (
     MT5RealtimeClient,
 )
 
+from services.application_runtime import ApplicationRuntime
+
 from services.dual_mt5_feed_service import (
     DualMT5FeedService,
 )
@@ -183,6 +185,8 @@ cfd_renko_service = RenkoService(
 intraday_repository = None
 
 historical_repository = None
+
+application_runtime = None
 
 win_intraday_pipeline = None
 cfd_intraday_pipeline = None
@@ -475,6 +479,26 @@ def handle_cfd_realtime_tick(tick):
             source_transition,
     )
 
+def create_application_runtime() -> ApplicationRuntime:
+    return ApplicationRuntime(
+        historical_symbol=HISTORICAL_SYMBOL,
+        intraday_symbol=INTRADAY_SYMBOL,
+        bootstrap_renko_service=RenkoService(
+            symbol=HISTORICAL_SYMBOL,
+            brick_sizes=BRICK_SIZES,
+        ),
+        xp_terminal_path=XP_MT5_PATH,
+        brick_sizes=list(BRICK_SIZES),
+        win_renko_service=RenkoService(
+            symbol=HISTORICAL_SYMBOL,
+            brick_sizes=BRICK_SIZES,
+        ),
+        cfd_renko_service=RenkoService(
+            symbol=HISTORICAL_SYMBOL,
+            brick_sizes=BRICK_SIZES,
+        ),
+        activtrades_terminal_path=ACTIVTRADES_MT5_PATH,
+    )
 
 # ============================================================
 # STARTUP / SHUTDOWN
@@ -482,6 +506,8 @@ def handle_cfd_realtime_tick(tick):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    global application_runtime
 
     global intraday_repository
     global historical_repository
@@ -497,727 +523,135 @@ async def lifespan(app: FastAPI):
 
     global renko_initialized
     global bootstrap_result
-
     global cfd_symbol_spec
 
-
-    # ========================================================
-    # 1. RESET INTRADAY
-    # ========================================================
-
-    print("")
-    print(
-        "========================================"
-    )
-
-    print(
-        "INICIANDO RENKO ANALYSIS"
-    )
-
-    print(
-        "========================================"
-    )
-
-    print("")
-    print(
-        "Resetando armazenamento intraday..."
-    )
-
-
-    reset_intraday_storage()
-
-
-    print(
-        "Armazenamento intraday resetado."
-    )
-
-
-    # ========================================================
-    # 2. HISTÓRICO OFICIAL
-    # ========================================================
-
-    print("")
-    print(
-        "Carregando Renko histórico..."
-    )
-
-
-    historical_db = SQLiteManager(
-        str(
-            HISTORICAL_RENKO_DB
-        )
-    )
-
-
-    historical_repository = (
-        RenkoRepository(
-            historical_db
-        )
-    )
-
-
-    # ========================================================
-    # 3. INTRADAY DATABASE
-    # ========================================================
-
-    intraday_repository = (
-        IntradayRepository()
-    )
-
-
-    intraday_repository.prepare_symbol(
-        HISTORICAL_SYMBOL
-    )
-
-
-    intraday_repository.prepare_symbol(
-        INTRADAY_SYMBOL
-    )
-
-
-    print("")
-    print(
-        "Trilhas intraday preparadas:"
-    )
-
-    print(
-        f"WIN : {HISTORICAL_SYMBOL}"
-    )
-
-    print(
-        f"CFD : {INTRADAY_SYMBOL}"
-    )
-
-
-    # ========================================================
-    # 4. BOOTSTRAP RENKO PELO HISTÓRICO D-1
-    #
-    # Nenhum brick de hoje é persistido durante o replay.
-    # ========================================================
-
-    bootstrap_renko_service.initialize_from_history(
-        historical_repository=
-            historical_repository,
-
-        intraday_repository=
-            intraday_repository
-            .renko_repository,
-
-        historical_symbol=
-            HISTORICAL_SYMBOL,
-
-        intraday_symbol=
-            HISTORICAL_SYMBOL,
-
-        defer_persistence=
-            True,
-    )
-
-
-    print("")
-    print(
-        "Estado Renko histórico carregado."
-    )
-
-
-    # ========================================================
-    # 5. BUSCA TODOS OS TICKS DE HOJE NA XP
-    # ========================================================
-
-    print("")
-    print(
-        "Conectando à XP para bootstrap..."
-    )
-
-
-    xp_history_client = (
-        MT5IntradayHistoryClient(
-            terminal_path=
-                XP_MT5_PATH
-        )
-    )
-
-
-    xp_history_client.connect()
-
+    application_runtime = create_application_runtime()
 
     try:
+        # ====================================================
+        # 1. INICIALIZA INFRAESTRUTURA DE MERCADO
+        # ====================================================
 
-        today_ticks = (
-            xp_history_client
-            .get_today_ticks(
-                HISTORICAL_SYMBOL
-            )
+        application_runtime.start()
+
+        # ====================================================
+        # 2. EXPÕE REFERÊNCIAS PARA OS ENDPOINTS
+        # ====================================================
+
+        intraday_repository = (
+            application_runtime.intraday_repository
         )
 
-    finally:
-
-        xp_history_client.disconnect()
-
-
-    print(
-        f"Ticks recebidos da XP: "
-        f"{len(today_ticks)}"
-    )
-
-
-    # ========================================================
-    # 6. PROCESSA OS TICKS UMA ÚNICA VEZ
-    #
-    # Não salvamos cada tick no SQLite.
-    #
-    # Esta foi a otimização já validada:
-    #
-    # todos os ticks
-    #      ↓
-    # Renko em memória
-    #      ↓
-    # persistência somente dos bricks
-    # ========================================================
-
-    print("")
-    print(
-        "Processando bootstrap Renko..."
-    )
-
-
-    processed_ticks = 0
-    last_timestamp_ms = None
-
-
-    for raw_tick in today_ticks:
-
-        intraday_tick = (
-            mt5_history_to_intraday_tick(
-                raw_tick,
-
-                symbol=
-                    HISTORICAL_SYMBOL,
-
-                source_type=
-                    "FUTURES",
-
-                price_source=
-                    "last",
-            )
+        historical_repository = (
+            application_runtime.historical_repository
         )
 
-
-        bootstrap_renko_service.process_intraday_tick(
-            intraday_tick
+        win_intraday_pipeline = (
+            application_runtime.win_intraday_pipeline
         )
 
-
-        processed_ticks += 1
-
-        last_timestamp_ms = (
-            intraday_tick.timestamp_ms
+        cfd_intraday_pipeline = (
+            application_runtime.cfd_intraday_pipeline
         )
 
-
-    bootstrap_result = {
-        "processed_ticks":
-            processed_ticks,
-
-        "last_timestamp_ms":
-            last_timestamp_ms,
-    }
-
-
-    print("")
-    print(
-        "Bootstrap processado."
-    )
-
-    print(
-        f"processed_ticks   : "
-        f"{processed_ticks}"
-    )
-
-    print(
-        f"last_timestamp_ms : "
-        f"{last_timestamp_ms}"
-    )
-
-
-    # ========================================================
-    # 7. MOSTRA ESTADO FINAL DO BOOTSTRAP
-    # ========================================================
-
-    print("")
-    print(
-        "ESTADO DEPOIS DO BOOTSTRAP"
-    )
-
-
-    for brick_size in BRICK_SIZES:
-
-        state = (
-            bootstrap_renko_service
-            .get_state(
-                brick_size
-            )
+        win_source_handoff_service = (
+            application_runtime.win_source_handoff_service
         )
 
-
-        if state is None:
-
-            print(
-                f"{brick_size}R | "
-                f"state=None"
-            )
-
-            continue
-
-
-        repository = (
-            bootstrap_renko_service
-            .repositories[
-                brick_size
-            ]
+        cfd_source_handoff_service = (
+            application_runtime.cfd_source_handoff_service
         )
 
-
-        print(
-            f"{brick_size}R | "
-            f"open={state.open} | "
-            f"last={state.last} | "
-            f"high={state.high} | "
-            f"low={state.low} | "
-            f"bricks={len(repository.bricks)}"
+        dual_feed_service = (
+            application_runtime.dual_feed_service
         )
 
-
-    # ========================================================
-    # 8. SNAPSHOT
-    #
-    # IMPORTANTE:
-    #
-    # Snapshot é tirado ANTES da bifurcação.
-    # ========================================================
-
-    runtime_snapshot = (
-        bootstrap_renko_service
-        .get_runtime_snapshot()
-    )
-
-
-    print("")
-    print(
-        "Snapshot do bootstrap criado."
-    )
-
-
-    # ========================================================
-    # 9. PERSISTE OS MESMOS BRICKS NAS DUAS TRILHAS
-    #
-    # NÃO recalcula Renko.
-    #
-    # O mesmo conjunto de bricks vai para:
-    #
-    # renko_winv26
-    # renko_bra50oct26
-    # ========================================================
-
-    print("")
-    print(
-        "Persistindo Renko nas duas trilhas..."
-    )
-
-
-    for brick_size in BRICK_SIZES:
-
-        repository = (
-            bootstrap_renko_service
-            .repositories[
-                brick_size
-            ]
+        bootstrap_result = (
+            application_runtime.bootstrap_result
         )
-
-
-        brick_count = len(
-            repository.bricks
-        )
-
-
-        repository.persist_bricks(
-            [
-                HISTORICAL_SYMBOL,
-                INTRADAY_SYMBOL,
-            ]
-        )
-
-
-        print(
-            f"{brick_size}R | "
-            f"{brick_count} bricks "
-            f"-> WIN + CFD"
-        )
-
-
-    # ========================================================
-    # 10. BIFURCAÇÃO DOS RUNTIMES
-    # ========================================================
-
-    print("")
-    print(
-        "Criando runtime WIN..."
-    )
-
-
-    win_renko_service.initialize_from_snapshot(
-        snapshot=
-            runtime_snapshot,
-
-        intraday_repository=
-            intraday_repository
-            .renko_repository,
-
-        intraday_symbol=
-            HISTORICAL_SYMBOL,
-    )
-
-
-    print(
-        "Criando runtime CFD..."
-    )
-
-
-    cfd_renko_service.initialize_from_snapshot(
-        snapshot=
-            runtime_snapshot,
-
-        intraday_repository=
-            intraday_repository
-            .renko_repository,
-
-        intraday_symbol=
-            INTRADAY_SYMBOL,
-    )
-
-
-    renko_initialized = True
-
-
-    print(
-        "Runtimes WIN e CFD criados."
-    )
-
-
-    # ========================================================
-    # 11. HANDOFF
-    #
-    # NÃO existe catch-up.
-    #
-    # O espaço entre:
-    #
-    # last_timestamp_ms do bootstrap
-    #
-    # e
-    #
-    # primeiro tick realtime
-    #
-    # permanece sem processamento.
-    #
-    # O primeiro tick realtime recebe:
-    #
-    # source_transition=True
-    #
-    # permitindo a marcação visual da transição/gap.
-    # ========================================================
-
-    win_source_handoff_service = (
-        SourceHandoffService(
-            last_bootstrap_timestamp_ms=
-                last_timestamp_ms,
-
-            from_source=
-                "FUTURES",
-
-            from_symbol=
-                HISTORICAL_SYMBOL,
-
-            to_source=
-                "FUTURES",
-
-            to_symbol=
-                HISTORICAL_SYMBOL,
-        )
-    )
-
-
-    cfd_source_handoff_service = (
-        SourceHandoffService(
-            last_bootstrap_timestamp_ms=
-                last_timestamp_ms,
-
-            from_source=
-                "FUTURES",
-
-            from_symbol=
-                HISTORICAL_SYMBOL,
-
-            to_source=
-                "CFD",
-
-            to_symbol=
-                INTRADAY_SYMBOL,
-        )
-    )
-
-
-    print("")
-    print(
-        "Handoffs preparados."
-    )
-
-
-    # ========================================================
-    # 12. PIPELINES
-    # ========================================================
-
-    win_intraday_pipeline = (
-        IntradayMarketPipeline(
-            tick_repository=
-                intraday_repository
-                .tick_repository,
-
-            renko_service=
-                win_renko_service,
-
-            symbol=
-                HISTORICAL_SYMBOL,
-
-            source_type=
-                "FUTURES",
-        )
-    )
-
-
-    cfd_intraday_pipeline = (
-        IntradayMarketPipeline(
-            tick_repository=
-                intraday_repository
-                .tick_repository,
-
-            renko_service=
-                cfd_renko_service,
-
-            symbol=
-                INTRADAY_SYMBOL,
-
-            source_type=
-                "CFD",
-        )
-    )
-
-
-    print(
-        "Pipelines WIN e CFD preparados."
-    )
-
-
-    # ========================================================
-    # 13. CACHE DA ESPECIFICAÇÃO CFD
-    #
-    # O processo principal conecta rapidamente à
-    # ActivTrades antes de iniciar os workers.
-    #
-    # Isso preserva /api/symbol sem manter uma terceira
-    # conexão MT5 ativa.
-    # ========================================================
-
-    print("")
-    print(
-        "Carregando especificação do CFD..."
-    )
-
-
-    spec_client = MT5RealtimeClient(
-        path=
-            ACTIVTRADES_MT5_PATH
-    )
-
-
-    try:
-
-        spec_client.connect()
 
         cfd_symbol_spec = (
-            spec_client
-            .get_symbol_spec(
-                INTRADAY_SYMBOL
+            application_runtime.cfd_symbol_spec
+        )
+
+        # Os endpoints utilizam os serviços Renko globais.
+        # Portanto, apontamos para os serviços do runtime.
+
+        global win_renko_service
+        global cfd_renko_service
+
+        win_renko_service = (
+            application_runtime.win_renko_service
+        )
+
+        cfd_renko_service = (
+            application_runtime.cfd_renko_service
+        )
+
+        renko_initialized = True
+
+        # ====================================================
+        # 3. CONFIGURA TRADING
+        # ====================================================
+
+        broker_router = BrokerRouter()
+
+        broker_router.register(
+            broker_id="xp",
+            feed_service=dual_feed_service,
+            feed="WIN",
+            symbol=HISTORICAL_SYMBOL,
+        )
+
+        broker_router.register(
+            broker_id="activtrades",
+            feed_service=dual_feed_service,
+            feed="CFD",
+            symbol=dual_feed_service.cfd_symbol,
+        )
+
+        order_guard = OrderGuard(
+            signal_provider=get_trading_signal
+        )
+
+        trading_operation_repository = (
+            TradingOperationRepository(
+                db_path="data/trading/trading.db"
             )
         )
 
-    except Exception as exc:
-
-        print(
-            "Não foi possível carregar "
-            "a especificação CFD: "
-            f"{exc}"
+        operation_manager = OperationManager(
+            repository=trading_operation_repository
         )
 
-        cfd_symbol_spec = None
+        trading_service = TradingService(
+            broker_router=broker_router,
+            broker_id="xp",
+            order_guard=order_guard,
+            operation_manager=operation_manager,
+        )
+
+        configure_trading_router(
+            trading_service
+        )
+
+        print("Trading Service configurado.")
+
+        # ====================================================
+        # 4. API ATIVA
+        # ====================================================
+
+        yield
 
     finally:
+        # ====================================================
+        # 5. SHUTDOWN
+        # ====================================================
 
         try:
-            spec_client.disconnect()
-        except Exception:
-            pass
-
-
-    # ========================================================
-    # 14. DUAL MT5 FEED
-    #
-    # Processo 1:
-    # XP / WINV26 / LAST
-    #
-    # Processo 2:
-    # ActivTrades / Bra50Oct26 / BID
-    #
-    # Ambos enviam RealtimeTick para uma Queue.
-    #
-    # O processo principal roteia:
-    #
-    # WIN -> handle_win_realtime_tick
-    # CFD -> handle_cfd_realtime_tick
-    # ========================================================
-
-    dual_feed_service = (
-        DualMT5FeedService(
-            win_terminal_path=
-                XP_MT5_PATH,
-
-            win_symbol=
-                HISTORICAL_SYMBOL,
-
-            cfd_terminal_path=
-                ACTIVTRADES_MT5_PATH,
-
-            cfd_symbol=
-                INTRADAY_SYMBOL,
-
-            poll_interval=
-                0.02,
-        )
-    )
-
-
-    dual_feed_service.set_win_callback(
-        handle_win_realtime_tick
-    )
-
-
-    dual_feed_service.set_cfd_callback(
-        handle_cfd_realtime_tick
-    )
-
-
-    print("")
-    print(
-        "Iniciando workers MT5..."
-    )
-
-
-    dual_feed_service.start()
-
-
-    print(
-        "Dual MT5 Feed iniciado."
-    )
-
-
-    # ========================================================
-    # TRADING
-    # ========================================================
-
-    broker_router = BrokerRouter()
-
-
-    broker_router.register(
-        broker_id="xp",
-        feed_service=dual_feed_service,
-        feed="WIN",
-        symbol=HISTORICAL_SYMBOL,
-    )
-
-
-    broker_router.register(
-        broker_id="activtrades",
-        feed_service=dual_feed_service,
-        feed="CFD",
-        symbol=dual_feed_service.cfd_symbol,
-    )
-
-
-    order_guard = OrderGuard(
-        signal_provider=
-            get_trading_signal
-    )
-
-
-    trading_operation_repository = (
-        TradingOperationRepository(
-            db_path=(
-                "data/trading/trading.db"
-            )
-        )
-    )
-
-    operation_manager = (
-        OperationManager(
-            repository=(
-                trading_operation_repository
-            )
-        )
-    )
-
-    trading_service = TradingService(
-        broker_router=broker_router,
-        broker_id="xp",
-        order_guard=order_guard,
-        operation_manager=operation_manager,
-    )
-
-
-    configure_trading_router(
-        trading_service
-    )
-
-
-    print(
-        "Trading Service configurado."
-    )
-
-
-    # ========================================================
-    # API ATIVA
-    # ========================================================
-
-    yield
-
-
-    # ========================================================
-    # SHUTDOWN
-    # ========================================================
-
-    print("")
-    print(
-        "Encerrando Dual MT5 Feed..."
-    )
-
-
-    if dual_feed_service is not None:
-
-        dual_feed_service.stop()
-
-
-    print(
-        "Dual MT5 Feed encerrado."
-    )
-
+            application_runtime.stop()
+        finally:
+            renko_initialized = False
 
 # ============================================================
 # FASTAPI
