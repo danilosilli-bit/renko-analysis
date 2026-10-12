@@ -160,25 +160,45 @@ class ApplicationRuntime:
         )
 
     def start(self) -> None:
-        self._reset_intraday_storage()
-        self._open_historical_repository()
-        self._prepare_intraday_repository()
-        self._initialize_historical_renko()
 
-        today_ticks = self._fetch_today_xp_ticks()
+        if self.started:
+            raise RuntimeError(
+                "ApplicationRuntime já está iniciado."
+            )
 
-        self.bootstrap_result = self._replay_today_xp_ticks(
-            today_ticks
-        )
+        try:
+            self._reset_intraday_storage()
+            self._open_historical_repository()
+            self._prepare_intraday_repository()
+            self._initialize_historical_renko()
 
-        self._create_runtime_snapshot()
-        self._persist_bootstrap_bricks()
-        self._initialize_market_runtimes()
-        self._prepare_source_handoffs()
-        self._prepare_market_pipelines()    
-        self._load_cfd_symbol_spec()
-        self._start_dual_feed()
-        self.started = True    
+            today_ticks = self._fetch_today_xp_ticks()
+
+            self.bootstrap_result = self._replay_today_xp_ticks(
+                today_ticks
+            )
+
+            self._create_runtime_snapshot()
+            self._persist_bootstrap_bricks()
+            self._initialize_market_runtimes()
+            self._prepare_source_handoffs()
+            self._prepare_market_pipelines()
+            self._load_cfd_symbol_spec()
+            self._start_dual_feed()
+
+            self.started = True
+
+        except Exception:
+
+            try:
+                self.stop()
+            except Exception as cleanup_error:
+                print(
+                    "Erro ao liberar recursos após "
+                    f"falha no startup: {cleanup_error}"
+                )
+
+            raise  
 
     def stop(self) -> None:
         try:
