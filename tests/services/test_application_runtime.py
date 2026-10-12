@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, call, patch, MagicMock
+
 
 from services.application_runtime import ApplicationRuntime
 
@@ -713,3 +714,57 @@ def test_stop_without_feed():
     runtime.stop()
 
     assert runtime.started is False
+
+def test_replay_without_today_ticks_preserves_historical_state():
+
+    from services.application_runtime import ApplicationRuntime
+
+    bootstrap_service = MagicMock()
+    historical_snapshot = object()
+
+    bootstrap_service.get_runtime_snapshot.return_value = (
+        historical_snapshot
+    )
+
+    runtime = ApplicationRuntime(
+        historical_symbol="WINV26",
+        intraday_symbol="Bra50Oct26",
+        bootstrap_renko_service=bootstrap_service,
+        xp_terminal_path="XP_TEST",
+        brick_sizes=[10, 30, 45],
+        win_renko_service=MagicMock(),
+        cfd_renko_service=MagicMock(),
+        activtrades_terminal_path="ACTIVTRADES_TEST",
+    )
+
+    # Simula um dia sem ticks da XP.
+    result = runtime._replay_today_xp_ticks([])
+
+    assert result == {
+        "processed_ticks": 0,
+        "last_timestamp_ms": None,
+    }
+
+    bootstrap_service.process_intraday_tick.assert_not_called()
+
+    # O snapshot deve vir do estado histórico já preparado.
+    runtime._create_runtime_snapshot()
+
+    assert runtime.runtime_snapshot is historical_snapshot
+
+    # Ambos os mercados recebem o mesmo estado inicial.
+    runtime.intraday_repository = MagicMock()
+
+    runtime._initialize_market_runtimes()
+
+    runtime.win_renko_service.initialize_from_snapshot.assert_called_once_with(
+        snapshot=historical_snapshot,
+        intraday_repository=runtime.intraday_repository.renko_repository,
+        intraday_symbol="WINV26",
+    )
+
+    runtime.cfd_renko_service.initialize_from_snapshot.assert_called_once_with(
+        snapshot=historical_snapshot,
+        intraday_repository=runtime.intraday_repository.renko_repository,
+        intraday_symbol="Bra50Oct26",
+    )
