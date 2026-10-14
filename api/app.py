@@ -93,8 +93,8 @@ from storage.sqlite_manager import (
 # CONFIGURAÇÃO
 # ============================================================
 
-HISTORICAL_SYMBOL = "WINV26"
-INTRADAY_SYMBOL = "Bra50Oct26"
+HISTORICAL_SYMBOL = "WINZ26"
+INTRADAY_SYMBOL = "Bra50Dec26"
 
 BRICK_SIZES = (
     10,
